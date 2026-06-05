@@ -1,0 +1,3 @@
+name: k3s-anywhere-exoscale
+runtime: python
+description: k3s cluster on Exoscale

@@ -1,0 +1,81 @@
+name: k3s cluster
+
+on:
+  workflow_call:
+    inputs:
+      provider:
+        required: true
+        type: string
+      config:
+        required: true
+        type: string
+      action:
+        required: true
+        type: string
+    outputs:
+      cluster_name:
+        value: ${{ jobs.run.outputs.cluster_name }}
+    secrets:
+      EXOSCALE_API_KEY:
+        required: false
+      EXOSCALE_API_SECRET:
+        required: false
+      AWS_ACCESS_KEY_ID:
+        required: false
+      AWS_SECRET_ACCESS_KEY:
+        required: false
+      PULUMI_CONFIG_PASSPHRASE:
+        required: true
+      STATE_BUCKET_NAME:
+        required: true
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    outputs:
+      cluster_name: ${{ steps.load-config.outputs.cluster_name }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate inputs
+        run: |
+          error() { echo "::error::$1"; exit 1; }
+          [ -n "${{ inputs.provider }}" ] || error "provider is required."
+          [ -n "${{ inputs.config }}"   ] || error "config is required."
+          [ -n "${{ inputs.action }}"   ] || error "action is required."
+          [ -f "configs/${{ inputs.config }}.env" ] \
+            || error "Config file configs/${{ inputs.config }}.env not found."
+
+      - name: Load config
+        id: load-config
+        run: |
+          grep -v '^#' "configs/${{ inputs.config }}.env" | grep '=' >> "$GITHUB_ENV"
+          CLUSTER_NAME=$(grep '^CLUSTER_NAME=' "configs/${{ inputs.config }}.env" | cut -d= -f2)
+          echo "cluster_name=${CLUSTER_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Create output directory
+        run: mkdir -p output
+
+      - name: Run provisioner
+        run: |
+          docker run --rm \
+            --env-file "configs/${{ inputs.config }}.env" \
+            -e ACTION="${{ inputs.action }}" \
+            -e PROVIDER="${{ inputs.provider }}" \
+            -e PULUMI_CONFIG_PASSPHRASE="${{ secrets.PULUMI_CONFIG_PASSPHRASE }}" \
+            -e STATE_BUCKET_NAME="${{ secrets.STATE_BUCKET_NAME }}" \
+            -e EXOSCALE_API_KEY="${{ secrets.EXOSCALE_API_KEY }}" \
+            -e EXOSCALE_API_SECRET="${{ secrets.EXOSCALE_API_SECRET }}" \
+            -e AWS_ACCESS_KEY_ID="${{ secrets.AWS_ACCESS_KEY_ID }}" \
+            -e AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_ACCESS_KEY }}" \
+            -v "${{ github.workspace }}/output:/app/output" \
+            ghcr.io/sinan-ozel/k3s-anywhere:latest
+
+      - name: Upload cluster output
+        if: inputs.action == 'provision' && success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cluster-output-${{ steps.load-config.outputs.cluster_name }}
+          path: output/${{ steps.load-config.outputs.cluster_name }}.json
+          retention-days: 7
