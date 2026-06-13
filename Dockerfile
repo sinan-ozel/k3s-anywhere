@@ -1,5 +1,7 @@
 FROM python:3.11-slim
 
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl openssh-client git jq unzip \
     && rm -rf /var/lib/apt/lists/*
@@ -16,8 +18,9 @@ RUN curl -fsSL "https://dl.k8s.io/release/$(curl -Ls https://dl.k8s.io/release/s
 RUN curl -fsSL https://get.pulumi.com | sh
 ENV PATH="/root/.pulumi/bin:${PATH}"
 
-# Exoscale CLI
-RUN curl -fsSL https://github.com/exoscale/cli/releases/latest/download/exoscale-cli_linux_amd64.tar.gz \
+# Exoscale CLI (release assets are version-stamped; no unversioned URL exists)
+ARG EXO_CLI_VERSION=1.95.1
+RUN curl -fsSL "https://github.com/exoscale/cli/releases/download/v${EXO_CLI_VERSION}/exoscale-cli_${EXO_CLI_VERSION}_linux_amd64.tar.gz" \
     | tar -xz -C /usr/local/bin exo
 
 # AWS CLI
