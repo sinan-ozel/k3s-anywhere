@@ -1,7 +1,7 @@
 import os
 import textwrap
 import pulumi
-import pulumi_exoscale as exoscale
+import pulumiverse_exoscale as exoscale
 import pulumi_tls as tls
 import pulumi_random as random
 

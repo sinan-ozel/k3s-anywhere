@@ -1,4 +1,4 @@
 pulumi>=3.0.0,<4.0.0
-pulumi-exoscale>=0.55.0
+pulumiverse_exoscale>=0.66.0
 pulumi-tls>=5.0.0
 pulumi-random>=4.0.0
