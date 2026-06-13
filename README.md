@@ -174,6 +174,28 @@ Required secrets in GitHub:
 | `PULUMI_CONFIG_PASSPHRASE` | All |
 | `STATE_BUCKET_NAME` | All |
 
+## Releasing the image
+
+The container is published to [Docker Hub](https://hub.docker.com/r/sinanozel/k3s-anywhere) by `.github/workflows/build.yaml`.
+
+**Releases.** Pushing a `vX.Y.Z` git tag builds and pushes `sinanozel/k3s-anywhere:X.Y.Z`, `:X.Y`, and `:latest`:
+
+```bash
+git tag v0.1.0 && git push origin v0.1.0
+```
+
+Release tags are write-once: if `:X.Y.Z` already exists on Docker Hub, the build fails instead of overwriting it. To republish, cut a new version.
+
+**Dev builds.** Every commit to `main` is pushed as `:X.Y.Z-dev.N`, where `X.Y.Z` is the next patch after the latest release tag and `N` is the number of commits since it (e.g. after `v0.1.0`, the 14th commit on `main` builds `0.1.1-dev.14`). The version is derived entirely from git history — no tags are written back, so rebuilding a commit reproduces the same version, and concurrent merges can never collide. Dev builds never move `:latest`.
+
+**Pull requests** that touch the image contents build it (without pushing) to validate the Dockerfile.
+
+Git tags use a `v` prefix (`v0.1.0`); Docker tags are bare (`0.1.0`).
+
+Requires two repository secrets: `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` (a Docker Hub access token scoped to read/write on this one repository — it grants no cloud access).
+
+The image is `linux/amd64` only; on Apple Silicon, run it with Rosetta emulation (Docker does this automatically) and build locally with `docker build --platform linux/amd64` if you ever bypass CI.
+
 ## Configuration reference
 
 **Base config** (`configs/<name>.env`):
