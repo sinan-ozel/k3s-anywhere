@@ -2,107 +2,44 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
-			"label": "Build EKS Admin Role Docker Image",
-			"type": "shell",
-			"command": "docker",
-			"args": [
-				"build",
-				"-t",
-				"eks-admin-role:latest",
-				"${workspaceFolder}/local_scripts/aws/eks_admin_role"
-			],
-			"group": {
-				"kind": "build",
-				"isDefault": true
-			},
-			"problemMatcher": [],
-			"hide": true
-		},
-		{
-			"label": "(legacy) Create EKS Admin Role",
-			"dependsOn": ["Build EKS Admin Role Docker Image"],
-			"type": "shell",
-			"command": "docker",
-			"args": [
-				"run",
-				"--rm",
-				"--env-file",
-				"${workspaceFolder}/.env",
-				"-v",
-				"${workspaceFolder}/local_scripts/aws/eks_admin_role:/app",
-				"-v",
-				"${env:HOME}/secrets/.aws:/root/.aws:ro",
-				"eks-admin-role:latest",
-				"create_eks_admin_role.py",
-				"--cluster-name",
-				"${input:eksCluster}",
-				"--repo-name",
-				"${input:eksRepo}"
-			],
-			"problemMatcher": []
-		},
-		{
-			"label": "(legacy) Cleanup EKS Admin Role",
-			"dependsOn": ["Build EKS Admin Role Docker Image"],
-			"type": "shell",
-			"command": "docker",
-			"args": [
-				"run",
-				"--rm",
-				"--env-file",
-				"${workspaceFolder}/.env",
-				"-v",
-				"${workspaceFolder}/local_scripts/aws/eks_admin_role:/app",
-				"-v",
-				"${env:HOME}/secrets/.aws:/root/.aws:ro",
-				"eks-admin-role:latest",
-				"cleanup_eks_admin_role.py",
-				"--cluster-name",
-				"${input:eksCluster}",
-				"--repo-name",
-				"${input:eksRepo}"
-			],
-			"problemMatcher": []
-		},
-		{
 			"label": "k3s: First-time setup (Exoscale)",
 			"type": "shell",
-			"command": "bash local_scripts/exoscale/setup.sh",
+			"command": "docker run --rm -e ACTION=setup -e PROVIDER=exoscale -e EXOSCALE_ZONE -e EXOSCALE_API_KEY -e EXOSCALE_API_SECRET sinanozel/k3s-anywhere:latest",
 			"problemMatcher": [],
 			"presentation": { "reveal": "always", "panel": "dedicated" }
 		},
 		{
 			"label": "k3s: First-time setup (AWS)",
 			"type": "shell",
-			"command": "bash local_scripts/aws/setup.sh",
+			"command": "docker run --rm -e ACTION=setup -e PROVIDER=aws -e AWS_REGION -v ${env:HOME}/.aws:/root/.aws:ro sinanozel/k3s-anywhere:latest",
 			"problemMatcher": [],
 			"presentation": { "reveal": "always", "panel": "dedicated" }
 		},
 		{
 			"label": "k3s: Provision (Exoscale)",
 			"type": "shell",
-			"command": "mkdir -p output && docker run --rm --env-file configs/example.env --env-file .env.secrets -e ACTION=provision -e PROVIDER=exoscale -v ${workspaceFolder}/output:/app/output ghcr.io/sinan-ozel/k3s-anywhere:latest",
+			"command": "mkdir -p output && docker run --rm --env-file configs/example.env --env-file .env.secrets -e ACTION=provision -e PROVIDER=exoscale -v ${workspaceFolder}/output:/app/output sinanozel/k3s-anywhere:latest",
 			"problemMatcher": [],
 			"presentation": { "reveal": "always", "panel": "dedicated" }
 		},
 		{
 			"label": "k3s: Provision (AWS)",
 			"type": "shell",
-			"command": "mkdir -p output && docker run --rm --env-file configs/example.env --env-file .env.secrets -e ACTION=provision -e PROVIDER=aws -v ${workspaceFolder}/output:/app/output ghcr.io/sinan-ozel/k3s-anywhere:latest",
+			"command": "mkdir -p output && docker run --rm --env-file configs/example.env --env-file .env.secrets -e ACTION=provision -e PROVIDER=aws -v ${workspaceFolder}/output:/app/output sinanozel/k3s-anywhere:latest",
 			"problemMatcher": [],
 			"presentation": { "reveal": "always", "panel": "dedicated" }
 		},
 		{
 			"label": "k3s: Teardown (Exoscale)",
 			"type": "shell",
-			"command": "docker run --rm --env-file configs/example.env --env-file .env.secrets -e ACTION=teardown -e PROVIDER=exoscale -v ${workspaceFolder}/output:/app/output ghcr.io/sinan-ozel/k3s-anywhere:latest",
+			"command": "docker run --rm --env-file configs/example.env --env-file .env.secrets -e ACTION=teardown -e PROVIDER=exoscale -v ${workspaceFolder}/output:/app/output sinanozel/k3s-anywhere:latest",
 			"problemMatcher": [],
 			"presentation": { "reveal": "always", "panel": "dedicated" }
 		},
 		{
 			"label": "k3s: Teardown (AWS)",
 			"type": "shell",
-			"command": "docker run --rm --env-file configs/example.env --env-file .env.secrets -e ACTION=teardown -e PROVIDER=aws -v ${workspaceFolder}/output:/app/output ghcr.io/sinan-ozel/k3s-anywhere:latest",
+			"command": "docker run --rm --env-file configs/example.env --env-file .env.secrets -e ACTION=teardown -e PROVIDER=aws -v ${workspaceFolder}/output:/app/output sinanozel/k3s-anywhere:latest",
 			"problemMatcher": [],
 			"presentation": { "reveal": "always", "panel": "dedicated" }
 		},
@@ -113,20 +50,5 @@
 			"problemMatcher": [],
 			"presentation": { "reveal": "always", "panel": "shared" }
 		}
-	],
-  "inputs": [
-		{
-			"id": "eksCluster",
-			"type": "pickString",
-			"description": "Enter the EKS cluster name",
-			"options": ["hello-k8s", "model-server"]
-		},
-		{
-			"id": "eksRepo",
-			"type": "pickString",
-			"description": "Enter the GitHub repo name",
-			"options": ["jupyterlab-on-kubernetes", "model-servers"]
-		}
 	]
 }
-

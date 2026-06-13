@@ -19,24 +19,36 @@ Longhorn is always installed as the default StorageClass. If you want a stateles
 ## Prerequisites
 
 - Docker
-- For Exoscale: `exo` CLI (for first-time setup)
-- For AWS: `aws` CLI (for first-time setup)
+
+That's it — the provider CLIs ship inside the container.
 
 ## First-time setup
 
-Run once per repo, locally, with admin credentials. This creates the Pulumi state bucket and a least-privilege IAM role for ongoing operations.
+Run once per cloud account, locally, with admin credentials. This creates the Pulumi state bucket and a least-privilege IAM role for ongoing operations. Admin credentials are passed at invocation and never stored anywhere — by design, this step never runs in GitHub Actions.
 
 ```bash
-# Exoscale
-EXOSCALE_ZONE=ch-gva-2 bash local_scripts/exoscale/setup.sh
+# Exoscale (org-admin API key)
+docker run --rm \
+  -e ACTION=setup -e PROVIDER=exoscale -e EXOSCALE_ZONE=ch-gva-2 \
+  -e EXOSCALE_API_KEY=<org-admin key> -e EXOSCALE_API_SECRET=<org-admin secret> \
+  sinanozel/k3s-anywhere:latest
 
-# AWS
-AWS_REGION=us-east-1 bash local_scripts/aws/setup.sh
+# AWS (admin profile from ~/.aws, or pass AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY instead)
+docker run --rm \
+  -e ACTION=setup -e PROVIDER=aws -e AWS_REGION=us-east-1 \
+  -v ~/.aws:/root/.aws:ro \
+  sinanozel/k3s-anywhere:latest
 ```
 
-The script prints the values to add to GitHub Secrets and your local `.env.secrets`.
+The container prints the values to add to GitHub Secrets and your local `.env.secrets`.
+
+If you skip this step, any other action fails fast with the exact setup command to run.
 
 VS Code: use the **k3s: First-time setup** tasks.
+
+### Rerunning setup
+
+Setup is idempotent. Rerun it **after upgrading the image tag** — newer versions may require additional provisioner permissions, and rerunning refreshes the IAM policy. Existing access keys (and therefore your GitHub Secrets) are kept as-is; add `-e ROTATE_KEY=true` to revoke them and issue a new key.
 
 ## Local usage
 
@@ -77,7 +89,7 @@ docker run --rm \
   -e ACTION=provision \
   -e PROVIDER=exoscale \
   -v $(pwd)/output:/app/output \
-  ghcr.io/sinan-ozel/k3s-anywhere:latest
+  sinanozel/k3s-anywhere:latest
 ```
 
 Get the kubeconfig:
@@ -98,7 +110,7 @@ docker run --rm \
   -e ACTION=teardown \
   -e PROVIDER=exoscale \
   -v $(pwd)/output:/app/output \
-  ghcr.io/sinan-ozel/k3s-anywhere:latest
+  sinanozel/k3s-anywhere:latest
 ```
 
 VS Code: use the **k3s: Provision** and **k3s: Teardown** tasks (edit `tasks.json` to point at your config file).

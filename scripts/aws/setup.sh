@@ -1,11 +1,22 @@
 #!/usr/bin/env bash
-# First-time setup for AWS. Run once with admin credentials.
-# Requires: aws CLI authenticated with an IAM admin user/role.
-# Reads: AWS_REGION (defaults to us-east-1), STATE_BUCKET_NAME (defaults to k3s-anywhere-state-<account-id>)
+# First-time setup for AWS. Run once with admin credentials, locally:
+#
+#   docker run --rm \
+#     -e ACTION=setup -e PROVIDER=aws -e AWS_REGION=us-east-1 \
+#     -v ~/.aws:/root/.aws:ro \
+#     sinanozel/k3s-anywhere:latest
+#
+# Requires: admin credentials via mounted ~/.aws or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY.
+# Reads: AWS_REGION (defaults to us-east-1), STATE_BUCKET_NAME (defaults to k3s-anywhere-state-<account-id>),
+#        ROTATE_KEY (set to "true" to replace the provisioner's access key)
+#
+# Idempotent: rerun after upgrading the image to refresh the provisioner
+# policy. Existing access keys are kept unless ROTATE_KEY=true.
 set -euo pipefail
 
 REGION="${AWS_REGION:-us-east-1}"
-ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text) \
+    || { echo "ERROR: admin credentials not found. Mount ~/.aws or set AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY." >&2; exit 1; }
 BUCKET="${STATE_BUCKET_NAME:-k3s-anywhere-state-${ACCOUNT_ID}}"
 USER_NAME="k3s-anywhere-provisioner"
 POLICY_NAME="k3s-anywhere-provisioner-policy"
@@ -94,6 +105,24 @@ echo "      Policy attached."
 # ── Access key ────────────────────────────────────────────────────────────────
 
 echo "[4/4] Creating access key..."
+EXISTING_KEYS=$(aws iam list-access-keys --user-name "${USER_NAME}" \
+    --query 'AccessKeyMetadata[].AccessKeyId' --output text)
+
+if [ -n "${EXISTING_KEYS}" ] && [ "${ROTATE_KEY:-false}" != "true" ]; then
+    echo "      Access key already exists (${EXISTING_KEYS}); keeping it."
+    echo "      Policy has been refreshed. Rerun with ROTATE_KEY=true to issue a new key."
+    echo ""
+    echo "Setup complete. Existing GitHub Secrets / .env.secrets remain valid."
+    exit 0
+fi
+
+if [ -n "${EXISTING_KEYS}" ]; then
+    for KEY_ID in ${EXISTING_KEYS}; do
+        aws iam delete-access-key --user-name "${USER_NAME}" --access-key-id "${KEY_ID}"
+        echo "      Rotated out old key: ${KEY_ID}"
+    done
+fi
+
 KEY_OUTPUT=$(aws iam create-access-key --user-name "${USER_NAME}")
 ACCESS_KEY=$(echo "$KEY_OUTPUT" | jq -r '.AccessKey.AccessKeyId')
 SECRET_KEY=$(echo "$KEY_OUTPUT" | jq -r '.AccessKey.SecretAccessKey')

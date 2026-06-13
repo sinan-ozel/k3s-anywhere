@@ -9,7 +9,7 @@ sinan-ozel/k3s-anywhere/.github/workflows/cluster.yaml@main
 
 Container image:
 ```
-ghcr.io/sinan-ozel/k3s-anywhere:latest
+sinanozel/k3s-anywhere:latest
 ```
 
 ## Principles
@@ -40,12 +40,14 @@ pulumi/
 
 scripts/
   exoscale/
+    setup.sh         ← first-time setup: state bucket + least-privilege IAM role
     cluster/
       teardown_load_balancer.py
     volume/
       provision.py
       teardown.py
   aws/
+    setup.sh
     cluster/
       teardown_load_balancer.py
     volume/
@@ -54,15 +56,6 @@ scripts/
   gcp/               ← planned
     cluster/
     volume/
-
-local_scripts/       ← run once locally by an operator with admin credentials
-  exoscale/
-    setup.sh         ← creates state bucket + least-privilege IAM role
-  aws/
-    setup.sh
-    k3s_role/        ← IAM policy documents for the provisioner role
-  gcp/
-    setup.sh
 
 configs/
   my-cluster.env                  ← shared base (cluster_name, node counts, port)
@@ -943,7 +936,7 @@ No additional role configuration is needed. Exoscale uses API key scoping rather
 
 ### AWS
 
-> **Note**: The current AWS implementation uses EKS. The k3s-on-EC2 implementation will require a significantly reduced privilege set. The EKS-specific policies below (AmazonEKSClusterPolicy, AmazonEKSWorkerNodePolicy, etc.) will be replaced. This section will be updated when the AWS k3s implementation is written. The goal is least-privilege roles created through local scripts in `local_scripts/aws/`.
+> **Note**: The current AWS implementation uses EKS. The k3s-on-EC2 implementation will require a significantly reduced privilege set. The EKS-specific policies below (AmazonEKSClusterPolicy, AmazonEKSWorkerNodePolicy, etc.) will be replaced. This section will be updated when the AWS k3s implementation is written. The goal is least-privilege roles created through the packaged setup script (`scripts/aws/setup.sh`, run locally via `ACTION=setup`).
 
 Secrets required:
 - `AWS_ACCESS_KEY_ID`
@@ -963,7 +956,7 @@ Amazon-managed policies attached:
 
 Inline policies: IAM role creation for EKS node groups, EKS access entry management. See `README.md` for full JSON.
 
-**Target for AWS k3s**: The EKS-specific policies above will not be needed. The actual policy will be determined by implementing and testing, then distilled into a least-privilege role via `local_scripts/aws/k3s_role/`. A practical k3s deployment on EC2 will require permissions across EC2, VPC, security groups, Elastic IPs, and potentially load balancers — do not assume the list is short. This section will be filled in once the implementation exists.
+**Target for AWS k3s**: The EKS-specific policies above will not be needed. The actual policy will be determined by implementing and testing, then distilled into a least-privilege role via `scripts/aws/setup.sh`. A practical k3s deployment on EC2 will require permissions across EC2, VPC, security groups, Elastic IPs, and potentially load balancers — do not assume the list is short. This section will be filled in once the implementation exists.
 
 Trust policy (OIDC, GitHub Actions):
 ```json
@@ -1003,7 +996,7 @@ To be determined when implementation is written.
 
 All ongoing operations (provision, teardown, refresh) run in GitHub Actions with least-privilege credentials. The setup that creates those credentials — and the Pulumi state bucket — requires broader permissions. This work is done **locally, once, under supervision**. The elevated credentials are never stored in GitHub Secrets.
 
-The setup scripts live in `local_scripts/<provider>/` and are wired as VS Code tasks.
+The setup scripts live in `scripts/<provider>/setup.sh` and ship inside the container image, invoked with `ACTION=setup`. The privileged step is therefore versioned and distributed with the product, but still executed locally: admin credentials are passed at invocation (mounted `~/.aws` or env vars) and never stored. VS Code tasks wrap the same `docker run` commands.
 
 ### Privilege model
 
@@ -1013,68 +1006,34 @@ The setup scripts live in `local_scripts/<provider>/` and are wired as VS Code t
 | Create least-privilege role | Operator, locally | Admin/owner key | Never committed |
 | Provision / teardown clusters | GitHub Actions | Scoped key | GitHub Secrets |
 
-### VS Code tasks
+### Invocation
 
-```json
-{
-  "version": "2.0.0",
-  "tasks": [
-    {
-      "label": "First-time setup: Exoscale",
-      "type": "shell",
-      "command": "bash local_scripts/exoscale/setup.sh",
-      "problemMatcher": []
-    },
-    {
-      "label": "First-time setup: AWS",
-      "type": "shell",
-      "command": "bash local_scripts/aws/setup.sh",
-      "problemMatcher": []
-    },
-    {
-      "label": "First-time setup: GCP",
-      "type": "shell",
-      "command": "bash local_scripts/gcp/setup.sh",
-      "problemMatcher": []
-    }
-  ]
-}
+```bash
+# Exoscale
+docker run --rm \
+  -e ACTION=setup -e PROVIDER=exoscale -e EXOSCALE_ZONE=ch-gva-2 \
+  -e EXOSCALE_API_KEY=<org-admin key> -e EXOSCALE_API_SECRET=<org-admin secret> \
+  sinanozel/k3s-anywhere:latest
+
+# AWS
+docker run --rm \
+  -e ACTION=setup -e PROVIDER=aws -e AWS_REGION=us-east-1 \
+  -v ~/.aws:/root/.aws:ro \
+  sinanozel/k3s-anywhere:latest
 ```
 
 ### What each setup script does
 
-Each `local_scripts/<provider>/setup.sh`:
+Each `scripts/<provider>/setup.sh`:
 
 1. Creates the Pulumi state bucket
 2. Creates a least-privilege IAM role/user scoped to what the provisioner needs
 3. Generates access credentials for that role
 4. Prints the values to add to GitHub Secrets
 
-The scripts read admin credentials from the operator's local shell environment — they are never written to any file in this repo.
+The scripts read admin credentials from the invocation environment — they are never written to any file in this repo or stored in the image.
 
-```bash
-# local_scripts/exoscale/setup.sh (sketch)
-set -euo pipefail
-
-BUCKET="${STATE_BUCKET_NAME:-pulumi-state}"
-ZONE="${EXOSCALE_ZONE:-ch-gva-2}"
-
-echo "Creating Pulumi state bucket: $BUCKET"
-exo storage create "$BUCKET" --zone "$ZONE" 2>/dev/null || echo "Bucket already exists."
-
-echo "Creating least-privilege IAM role for GitHub Actions..."
-exo iam role create k3s-anywhere-provisioner \
-  --description "k3s-anywhere GitHub Actions provisioner" \
-  --policy '{"default-service-strategy":"deny","services":{"compute":{"type":"allow"},"object-storage":{"type":"allow"}}}'
-
-exo iam api-key create k3s-anywhere-key --role k3s-anywhere-provisioner
-
-echo ""
-echo "Add the following to GitHub Secrets:"
-echo "  EXOSCALE_API_KEY=<key printed above>"
-echo "  EXOSCALE_API_SECRET=<secret printed above>"
-echo "  STATE_BUCKET_NAME=$BUCKET"
-```
+Setup is idempotent: rerunning it refreshes the provisioner policy (required after upgrading to an image version that needs new permissions) but keeps existing access keys unless `ROTATE_KEY=true` is set. The entrypoint also verifies the state bucket is reachable before any other action and, if it is not, fails with the exact setup command to run — so a consumer who skips setup gets a self-documenting error rather than an opaque Pulumi failure.
 
 After setup, the operator's admin credentials are no longer needed for day-to-day operations.
 

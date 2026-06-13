@@ -5,21 +5,31 @@ error() { echo "ERROR: $1" >&2; exit 1; }
 
 # ── Validation ────────────────────────────────────────────────────────────────
 
-[ -n "${ACTION:-}"       ] || error "ACTION is not set. Valid: provision | teardown | refresh | reset"
-[ -n "${PROVIDER:-}"     ] || error "PROVIDER is not set. Valid: exoscale | aws | gcp"
-[ -n "${CLUSTER_NAME:-}" ] || error "CLUSTER_NAME is not set."
-[ -n "${STATE_BUCKET_NAME:-}" ] || error "STATE_BUCKET_NAME is not set."
-[ -n "${PULUMI_CONFIG_PASSPHRASE:-}" ] || error "PULUMI_CONFIG_PASSPHRASE is not set."
+[ -n "${ACTION:-}"   ] || error "ACTION is not set. Valid: setup | provision | teardown | refresh | reset"
+[ -n "${PROVIDER:-}" ] || error "PROVIDER is not set. Valid: exoscale | aws | gcp"
 
 case "$ACTION" in
-  provision|teardown|refresh|reset) ;;
-  *) error "Unknown ACTION '${ACTION}'. Valid: provision | teardown | refresh | reset" ;;
+  setup|provision|teardown|refresh|reset) ;;
+  *) error "Unknown ACTION '${ACTION}'. Valid: setup | provision | teardown | refresh | reset" ;;
 esac
 
 case "$PROVIDER" in
   exoscale|aws|gcp) ;;
   *) error "Unknown PROVIDER '${PROVIDER}'. Valid: exoscale | aws | gcp" ;;
 esac
+
+# ── First-time setup ──────────────────────────────────────────────────────────
+# Runs locally with admin credentials; needs none of the cluster variables.
+
+if [ "$ACTION" = "setup" ]; then
+  [ -f "/app/scripts/${PROVIDER}/setup.sh" ] \
+    || error "First-time setup is not implemented for provider '${PROVIDER}'."
+  exec "/app/scripts/${PROVIDER}/setup.sh"
+fi
+
+[ -n "${CLUSTER_NAME:-}" ] || error "CLUSTER_NAME is not set."
+[ -n "${STATE_BUCKET_NAME:-}" ] || error "STATE_BUCKET_NAME is not set."
+[ -n "${PULUMI_CONFIG_PASSPHRASE:-}" ] || error "PULUMI_CONFIG_PASSPHRASE is not set."
 
 case "$PROVIDER" in
   exoscale)
@@ -51,15 +61,59 @@ esac
 
 # ── Pulumi state backend ──────────────────────────────────────────────────────
 
+setup_missing() {
+  cat >&2 <<EOF
+ERROR: Cannot reach Pulumi state bucket '${STATE_BUCKET_NAME}'.
+
+This usually means one of:
+  - first-time setup has never been run for this ${PROVIDER} account, or
+  - the credentials provided here are not the provisioner credentials
+    that setup printed (check your GitHub Secrets / .env.secrets), or
+  - STATE_BUCKET_NAME does not match the bucket setup created.
+
+First-time setup runs once per account, locally, with admin credentials
+(never in CI):
+
+EOF
+  case "$PROVIDER" in
+    exoscale)
+      cat >&2 <<EOF
+  docker run --rm \\
+    -e ACTION=setup -e PROVIDER=exoscale -e EXOSCALE_ZONE=${EXOSCALE_ZONE} \\
+    -e EXOSCALE_API_KEY=<org-admin key> -e EXOSCALE_API_SECRET=<org-admin secret> \\
+    sinanozel/k3s-anywhere:latest
+EOF
+      ;;
+    aws)
+      cat >&2 <<EOF
+  docker run --rm \\
+    -e ACTION=setup -e PROVIDER=aws -e AWS_REGION=${AWS_REGION} \\
+    -v ~/.aws:/root/.aws:ro \\
+    sinanozel/k3s-anywhere:latest
+EOF
+      ;;
+  esac
+  cat >&2 <<EOF
+
+Then add the values it prints to GitHub Secrets and your local .env.secrets.
+See https://github.com/sinan-ozel/k3s-anywhere#first-time-setup
+EOF
+  exit 1
+}
+
 case "$PROVIDER" in
   exoscale)
     # Pulumi S3 backend against Exoscale SOS — use Exoscale keys as AWS creds
     export AWS_ACCESS_KEY_ID="${EXOSCALE_API_KEY}"
     export AWS_SECRET_ACCESS_KEY="${EXOSCALE_API_SECRET}"
     BACKEND_URL="s3://${STATE_BUCKET_NAME}?endpoint=https://sos-${EXOSCALE_ZONE}.exo.io&awssdk=v2&region=us-east-1"
+    aws s3api head-bucket --bucket "${STATE_BUCKET_NAME}" \
+      --endpoint-url "https://sos-${EXOSCALE_ZONE}.exo.io" --region us-east-1 \
+      >/dev/null 2>&1 || setup_missing
     ;;
   aws)
     BACKEND_URL="s3://${STATE_BUCKET_NAME}"
+    aws s3api head-bucket --bucket "${STATE_BUCKET_NAME}" >/dev/null 2>&1 || setup_missing
     ;;
   gcp)
     BACKEND_URL="gs://${STATE_BUCKET_NAME}"

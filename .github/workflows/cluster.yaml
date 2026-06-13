@@ -44,6 +44,8 @@ jobs:
           [ -n "${{ inputs.provider }}" ] || error "provider is required."
           [ -n "${{ inputs.config }}"   ] || error "config is required."
           [ -n "${{ inputs.action }}"   ] || error "action is required."
+          [ "${{ inputs.action }}" != "setup" ] \
+            || error "ACTION=setup creates IAM credentials and must be run locally with admin credentials, never in CI. See README → First-time setup."
           [ -f "configs/${{ inputs.config }}.env" ] \
             || error "Config file configs/${{ inputs.config }}.env not found."
 
@@ -70,7 +72,7 @@ jobs:
             -e AWS_ACCESS_KEY_ID="${{ secrets.AWS_ACCESS_KEY_ID }}" \
             -e AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_ACCESS_KEY }}" \
             -v "${{ github.workspace }}/output:/app/output" \
-            ghcr.io/sinan-ozel/k3s-anywhere:latest
+            sinanozel/k3s-anywhere:latest
 
       - name: Upload cluster output
         if: inputs.action == 'provision' && success()
