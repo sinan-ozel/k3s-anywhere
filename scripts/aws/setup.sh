@@ -14,12 +14,18 @@
 # policy. Existing access keys are kept unless ROTATE_KEY=true.
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 REGION="${AWS_REGION:-us-east-1}"
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text) \
     || { echo "ERROR: admin credentials not found. Mount ~/.aws or set AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY." >&2; exit 1; }
 BUCKET="${STATE_BUCKET_NAME:-k3s-anywhere-state-${ACCOUNT_ID}}"
 USER_NAME="k3s-anywhere-provisioner"
 POLICY_NAME="k3s-anywhere-provisioner-policy"
+
+# AWS-managed policies to attach to the provisioner user.
+# k3s-on-EC2 requires none. Add ARNs here if future features need them.
+MANAGED_POLICIES=()
 
 echo "=== k3s-anywhere first-time setup: AWS ==="
 echo "Region:       ${REGION}"
@@ -51,55 +57,22 @@ aws iam create-user --user-name "${USER_NAME}" 2>/dev/null \
 # ── IAM policy ────────────────────────────────────────────────────────────────
 
 echo "[3/4] Attaching least-privilege policy..."
-POLICY_DOC=$(cat <<EOF
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Sid": "Statebucket",
-      "Effect": "Allow",
-      "Action": ["s3:*"],
-      "Resource": [
-        "arn:aws:s3:::${BUCKET}",
-        "arn:aws:s3:::${BUCKET}/*"
-      ]
-    },
-    {
-      "Sid": "ClusterBuckets",
-      "Effect": "Allow",
-      "Action": ["s3:CreateBucket", "s3:DeleteBucket", "s3:PutBucketAcl",
-                 "s3:PutBucketPublicAccessBlock", "s3:GetBucketLocation",
-                 "s3:ListBucket", "s3:PutObject", "s3:GetObject", "s3:DeleteObject"],
-      "Resource": ["arn:aws:s3:::*-backups", "arn:aws:s3:::*-backups/*"]
-    },
-    {
-      "Sid": "EC2",
-      "Effect": "Allow",
-      "Action": [
-        "ec2:*"
-      ],
-      "Resource": "*"
-    },
-    {
-      "Sid": "IAMBackupUser",
-      "Effect": "Allow",
-      "Action": [
-        "iam:CreateUser", "iam:DeleteUser",
-        "iam:PutUserPolicy", "iam:DeleteUserPolicy",
-        "iam:CreateAccessKey", "iam:DeleteAccessKey",
-        "iam:GetUser", "iam:GetUserPolicy", "iam:ListAccessKeys"
-      ],
-      "Resource": "arn:aws:iam::${ACCOUNT_ID}:user/*-backup"
-    }
-  ]
-}
-EOF
-)
+
+POLICY_DOC=$(sed \
+    -e "s|{{ACCOUNT_ID}}|${ACCOUNT_ID}|g" \
+    -e "s|{{BUCKET}}|${BUCKET}|g" \
+    "${SCRIPT_DIR}/provisioner-policy.json")
 
 aws iam put-user-policy \
     --user-name "${USER_NAME}" \
     --policy-name "${POLICY_NAME}" \
-    --policy-document "$POLICY_DOC"
+    --policy-document "${POLICY_DOC}"
+
+for POLICY_ARN in "${MANAGED_POLICIES[@]}"; do
+    aws iam attach-user-policy --user-name "${USER_NAME}" --policy-arn "${POLICY_ARN}"
+    echo "      Attached: ${POLICY_ARN##*/}"
+done
+
 echo "      Policy attached."
 
 # ── Access key ────────────────────────────────────────────────────────────────

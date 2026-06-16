@@ -12,6 +12,11 @@ GPU_NODES      = int(os.environ.get("GPU_NODE_COUNT", "0"))
 PORT           = int(os.environ["PORT"])
 REGION         = os.environ["AWS_REGION"]
 K3S_VERSION    = os.environ.get("K3S_VERSION", "v1.31.4+k3s1")
+# S3 bucket names are global. If <CLUSTER_NAME>-backups is already taken by
+# another account, set BUCKET_PREFIX to a unique value (e.g. your org name
+# followed by a dash). The provisioner IAM policy in setup.sh covers *-backups,
+# so the prefix does not require a setup rerun.
+BUCKET_PREFIX  = os.environ.get("BUCKET_PREFIX", "")
 
 # ── SSH key ───────────────────────────────────────────────────────────────────
 
@@ -215,7 +220,7 @@ for i in range(GPU_NODES):
 
 backup_bucket = aws.s3.BucketV2(
     f"{CLUSTER_NAME}-backups",
-    bucket=f"{CLUSTER_NAME}-backups",
+    bucket=f"{BUCKET_PREFIX}{CLUSTER_NAME}-backups",
     tags={"k3s-anywhere": CLUSTER_NAME},
 )
 
