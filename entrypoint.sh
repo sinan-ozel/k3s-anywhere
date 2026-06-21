@@ -5,12 +5,12 @@ error() { echo "ERROR: $1" >&2; exit 1; }
 
 # ── Validation ────────────────────────────────────────────────────────────────
 
-[ -n "${ACTION:-}"   ] || error "ACTION is not set. Valid: setup | provision | teardown | refresh | reset"
+[ -n "${ACTION:-}"   ] || error "ACTION is not set. Valid: setup | purge | provision | teardown | refresh | reset"
 [ -n "${PROVIDER:-}" ] || error "PROVIDER is not set. Valid: exoscale | aws | gcp"
 
 case "$ACTION" in
-  setup|provision|teardown|refresh|reset) ;;
-  *) error "Unknown ACTION '${ACTION}'. Valid: setup | provision | teardown | refresh | reset" ;;
+  setup|purge|provision|teardown|refresh|reset) ;;
+  *) error "Unknown ACTION '${ACTION}'. Valid: setup | purge | provision | teardown | refresh | reset" ;;
 esac
 
 case "$PROVIDER" in
@@ -18,13 +18,18 @@ case "$PROVIDER" in
   *) error "Unknown PROVIDER '${PROVIDER}'. Valid: exoscale | aws | gcp" ;;
 esac
 
-# ── First-time setup ──────────────────────────────────────────────────────────
-# Runs locally with admin credentials; needs none of the cluster variables.
+# ── Operator-only actions (admin credentials, never in CI) ────────────────────
 
 if [ "$ACTION" = "setup" ]; then
   [ -f "/app/scripts/${PROVIDER}/setup.sh" ] \
     || error "First-time setup is not implemented for provider '${PROVIDER}'."
   exec "/app/scripts/${PROVIDER}/setup.sh"
+fi
+
+if [ "$ACTION" = "purge" ]; then
+  [ -f "/app/scripts/${PROVIDER}/purge.sh" ] \
+    || error "Purge is not implemented for provider '${PROVIDER}'."
+  exec "/app/scripts/${PROVIDER}/purge.sh"
 fi
 
 [ -n "${CLUSTER_NAME:-}" ] || error "CLUSTER_NAME is not set."

@@ -50,6 +50,29 @@ VS Code: use the **k3s: First-time setup** tasks.
 
 Setup is idempotent. Rerun it **after upgrading the image tag** — newer versions may require additional provisioner permissions, and rerunning refreshes the IAM policy. Existing access keys (and therefore your GitHub Secrets) are kept as-is; add `-e ROTATE_KEY=true` to revoke them and issue a new key.
 
+### Purging the setup
+
+To decommission k3s-anywhere from a cloud account entirely — for example, after a team's environment is no longer needed — run `ACTION=purge`. This deletes the provisioner IAM user (and its access keys and policy) and the Pulumi state bucket.
+
+**Destroy all clusters first** (`ACTION=teardown` per cluster). Purging while clusters are still running removes the credentials needed to manage them via Pulumi, leaving orphaned infrastructure.
+
+```bash
+# Interactive (prompts for confirmation)
+docker run --rm -it \
+  -e ACTION=purge -e PROVIDER=aws -e AWS_REGION=us-east-1 \
+  -v ~/.aws:/root/.aws:ro \
+  sinanozel/k3s-anywhere:latest
+
+# Non-interactive (skip prompt — use in scripts)
+docker run --rm \
+  -e ACTION=purge -e PROVIDER=aws -e AWS_REGION=us-east-1 \
+  -e FORCE=true \
+  -v ~/.aws:/root/.aws:ro \
+  sinanozel/k3s-anywhere:latest
+```
+
+The confirmation prompt requires you to type the IAM username (`k3s-anywhere-provisioner`) before anything is deleted. The `-it` flag is required for the prompt; omit it only with `FORCE=true`.
+
 ## Local usage
 
 Create a config file:

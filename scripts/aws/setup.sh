@@ -25,6 +25,8 @@ POLICY_NAME="k3s-anywhere-provisioner-policy"
 
 # AWS-managed policies to attach to the provisioner user.
 # k3s-on-EC2 requires none. Add ARNs here if future features need them.
+# IMPORTANT: If you change this list, update purge.sh to match — it must
+# detach whatever this script attaches.
 MANAGED_POLICIES=()
 
 echo "=== k3s-anywhere first-time setup: AWS ==="
