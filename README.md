@@ -196,6 +196,38 @@ Requires two repository secrets: `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` (a D
 
 The image is `linux/amd64` only; on Apple Silicon, run it with Rosetta emulation (Docker does this automatically) and build locally with `docker build --platform linux/amd64` if you ever bypass CI.
 
+## Repository layout
+
+```
+.github/workflows/
+  build.yaml          ← builds and pushes the Docker image (CI)
+  cluster.yaml        ← reusable workflow: provision / teardown (CI)
+
+pulumi/
+  exoscale/           ← Pulumi program: k3s on Exoscale compute
+  aws/                ← Pulumi program: k3s on EC2
+
+scripts/
+  exoscale/
+    setup.sh          ← operator-run, admin credentials, never in CI
+    cluster/
+      post_provision.sh          ← run by the container during provision
+      teardown_load_balancer.py  ← run by the container during teardown
+  aws/
+    setup.sh                ← operator-run, admin credentials, never in CI
+    provisioner-policy.json ← IAM policy document read by setup.sh
+    cluster/
+      post_provision.sh
+      teardown_load_balancer.py
+
+configs/
+  <name>.env                      ← shared base config (cluster name, node counts, port)
+  exoscale/<name>-<zone>.env      ← zone override
+  aws/<name>-<region>.env         ← region override
+```
+
+`scripts/<provider>/setup.sh` runs **locally** via `ACTION=setup` with admin credentials; it is never called from GitHub Actions. Everything under `scripts/<provider>/cluster/` runs **inside the container** as part of the provision and teardown actions, with least-privilege credentials, in CI.
+
 ## Configuration reference
 
 **Base config** (`configs/<name>.env`):
