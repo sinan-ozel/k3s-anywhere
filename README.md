@@ -150,6 +150,7 @@ jobs:
     with:
       provider: exoscale
       config: configs/my-cluster
+      provider_config: configs/exoscale/my-cluster-ch-gva-2
       action: provision
     secrets: inherit
 
@@ -180,6 +181,7 @@ jobs:
     with:
       provider: aws
       config: configs/my-cluster
+      provider_config: configs/aws/my-cluster-us-east-1
       action: ${{ inputs.action }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -187,6 +189,8 @@ jobs:
       PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
       STATE_BUCKET_NAME: ${{ secrets.STATE_BUCKET_NAME }}
 ```
+
+`provider_config` is required for AWS (`AWS_REGION`) and Exoscale (`EXOSCALE_ZONE`). It mirrors the local `--env-file` layering pattern and its variables override the base config.
 
 Required secrets in GitHub:
 
@@ -263,6 +267,8 @@ configs/
 | `PORT` | yes | Single public port routed through Traefik |
 | `STATE_BUCKET_NAME` | yes | Pulumi state bucket (created by setup script) |
 | `USE_PUBLIC_DNS` | no (default `false`) | AWS, Azure: use the cloud-assigned public DNS name in the kubeconfig and `api_endpoint` instead of the IP. The TLS certificate always covers both, so either works. Ignored on Exoscale and GCP. |
+| `K3S_VERSION` | no (default `v1.31.4+k3s1`) | k3s release to install on all nodes. |
+| `LONGHORN_VERSION` | no (default `1.7.2`) | Longhorn Helm chart version to install. |
 
 **Provider overrides** (`configs/<provider>/<name>.env`):
 
