@@ -29,6 +29,17 @@ RUN curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tm
     && /tmp/aws/install \
     && rm -rf /tmp/awscliv2.zip /tmp/aws
 
+# age + sops (for ACTION=fetch: decrypt sops-encrypted cluster output artifacts)
+ARG AGE_VERSION=1.2.1
+ARG SOPS_VERSION=3.10.2
+RUN curl -fsSL \
+      "https://github.com/FiloSottile/age/releases/download/v${AGE_VERSION}/age-v${AGE_VERSION}-linux-amd64.tar.gz" \
+      | tar -xz -C /usr/local/bin --strip-components=1 age/age age/age-keygen \
+    && curl -fsSL \
+      "https://github.com/getsops/sops/releases/download/v${SOPS_VERSION}/sops-v${SOPS_VERSION}.linux.amd64" \
+      -o /usr/local/bin/sops \
+    && chmod +x /usr/local/bin/sops
+
 COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 

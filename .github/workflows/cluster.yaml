@@ -21,6 +21,23 @@ on:
       action:
         required: true
         type: string
+      sops_age_recipient:
+        required: false
+        type: string
+        default: ""
+        description: >
+          age public key to encrypt the cluster output artifact before upload.
+          If provided, output/<cluster-name>.json is encrypted with sops and
+          uploaded as <cluster-name>.json.enc. Generate a keypair with age-keygen;
+          store the private key as SOPS_AGE_KEY in your repo secrets for decryption.
+      image:
+        required: false
+        type: string
+        default: "sinanozel/k3s-anywhere:latest"
+        description: >
+          Provisioner image to run. Pin this to match the workflow ref you are
+          calling — e.g. @v0.1.0 should use sinanozel/k3s-anywhere:0.1.0.
+          Defaults to :latest, which is only published on stable releases.
     outputs:
       cluster_name:
         value: ${{ jobs.run.outputs.cluster_name }}
@@ -95,12 +112,42 @@ jobs:
             -e AWS_ACCESS_KEY_ID="${{ secrets.AWS_ACCESS_KEY_ID }}" \
             -e AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_ACCESS_KEY }}" \
             -v "${{ github.workspace }}/output:/app/output" \
-            sinanozel/k3s-anywhere:latest
+            "${{ inputs.image }}"
+
+      - name: Install sops and age
+        if: inputs.action == 'provision' && inputs.sops_age_recipient != ''
+        run: |
+          AGE_VERSION="1.2.1"
+          SOPS_VERSION="3.10.2"
+          curl -fsSL \
+            "https://github.com/FiloSottile/age/releases/download/v${AGE_VERSION}/age-v${AGE_VERSION}-linux-amd64.tar.gz" \
+            | tar -xz -C /usr/local/bin --strip-components=1 age/age age/age-keygen
+          curl -fsSL \
+            "https://github.com/getsops/sops/releases/download/v${SOPS_VERSION}/sops-v${SOPS_VERSION}.linux.amd64" \
+            -o /usr/local/bin/sops
+          chmod +x /usr/local/bin/sops
+
+      - name: Encrypt cluster output
+        if: inputs.action == 'provision' && inputs.sops_age_recipient != ''
+        env:
+          SOPS_AGE_RECIPIENTS: ${{ inputs.sops_age_recipient }}
+        run: |
+          sops --encrypt \
+            "output/${{ steps.load-config.outputs.cluster_name }}.json" \
+            > "output/${{ steps.load-config.outputs.cluster_name }}.json.enc"
 
       - name: Upload cluster output
-        if: inputs.action == 'provision' && success()
+        if: inputs.action == 'provision' && inputs.sops_age_recipient == ''
         uses: actions/upload-artifact@v4
         with:
           name: cluster-output-${{ steps.load-config.outputs.cluster_name }}
           path: output/${{ steps.load-config.outputs.cluster_name }}.json
+          retention-days: 7
+
+      - name: Upload cluster output (encrypted)
+        if: inputs.action == 'provision' && inputs.sops_age_recipient != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: cluster-output-${{ steps.load-config.outputs.cluster_name }}
+          path: output/${{ steps.load-config.outputs.cluster_name }}.json.enc
           retention-days: 7

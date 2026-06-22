@@ -5,20 +5,27 @@ error() { echo "ERROR: $1" >&2; exit 1; }
 
 # ── Validation ────────────────────────────────────────────────────────────────
 
-[ -n "${ACTION:-}"   ] || error "ACTION is not set. Valid: setup | purge | provision | teardown | refresh | reset"
-[ -n "${PROVIDER:-}" ] || error "PROVIDER is not set. Valid: exoscale | aws | gcp"
+[ -n "${ACTION:-}" ] || error "ACTION is not set. Valid: setup | purge | fetch | provision | teardown | refresh | reset"
 
 case "$ACTION" in
-  setup|purge|provision|teardown|refresh|reset) ;;
-  *) error "Unknown ACTION '${ACTION}'. Valid: setup | purge | provision | teardown | refresh | reset" ;;
+  setup|purge|fetch|provision|teardown|refresh|reset) ;;
+  *) error "Unknown ACTION '${ACTION}'. Valid: setup | purge | fetch | provision | teardown | refresh | reset" ;;
 esac
+
+# ── Provider-agnostic actions ─────────────────────────────────────────────────
+
+if [ "$ACTION" = "fetch" ]; then
+  exec "/app/scripts/fetch/fetch.sh"
+fi
+
+# ── Provider-specific actions ─────────────────────────────────────────────────
+
+[ -n "${PROVIDER:-}" ] || error "PROVIDER is not set. Valid: exoscale | aws | gcp"
 
 case "$PROVIDER" in
   exoscale|aws|gcp) ;;
   *) error "Unknown PROVIDER '${PROVIDER}'. Valid: exoscale | aws | gcp" ;;
 esac
-
-# ── Operator-only actions (admin credentials, never in CI) ────────────────────
 
 if [ "$ACTION" = "setup" ]; then
   [ -f "/app/scripts/${PROVIDER}/setup.sh" ] \

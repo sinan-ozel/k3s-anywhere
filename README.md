@@ -22,6 +22,85 @@ Longhorn is always installed as the default StorageClass. If you want a stateles
 
 That's it — the provider CLIs ship inside the container.
 
+## 🚀 Quick Start
+
+**1. Generate an age keypair** (once — encrypts cluster credentials at rest in GitHub Actions):
+
+```bash
+docker run --rm --entrypoint age-keygen sinanozel/k3s-anywhere:latest
+```
+
+Save both output lines. The `age1...` public key goes into your workflow. The `AGE-SECRET-KEY-1...` private key goes into GitHub Secrets as `SOPS_AGE_KEY`.
+
+**2. Run first-time setup** (once per cloud account, locally, with admin credentials):
+
+```bash
+# AWS
+docker run --rm -e ACTION=setup -e PROVIDER=aws -e AWS_REGION=us-east-1 \
+  -v ~/.aws:/root/.aws:ro sinanozel/k3s-anywhere:latest
+
+# Exoscale
+docker run --rm -e ACTION=setup -e PROVIDER=exoscale -e EXOSCALE_ZONE=ch-gva-2 \
+  -e EXOSCALE_API_KEY=<org-admin key> -e EXOSCALE_API_SECRET=<org-admin secret> \
+  sinanozel/k3s-anywhere:latest
+```
+
+The container prints the provisioner credentials and state bucket name — add them to GitHub Secrets.
+
+**3. Add GitHub Secrets** to your repo:
+
+| Secret | Source |
+|---|---|
+| `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` | setup output |
+| `STATE_BUCKET_NAME` | setup output |
+| `PULUMI_CONFIG_PASSPHRASE` | choose a strong passphrase |
+| `SOPS_AGE_KEY` | `AGE-SECRET-KEY-1...` from step 1 |
+
+**4. Create a cluster config** in your repo:
+
+```bash
+# configs/my-cluster.env
+CLUSTER_NAME=my-cluster
+DEFAULT_NODE_COUNT=2
+PORT=8888
+STATE_BUCKET_NAME=k3s-anywhere-state-<account-id>
+
+# configs/aws/my-cluster-us-east-1.env
+AWS_REGION=us-east-1
+```
+
+**5. Call the reusable workflow**, passing the `age1...` public key from step 1:
+
+```yaml
+jobs:
+  cluster:
+    uses: sinan-ozel/k3s-anywhere/.github/workflows/cluster.yaml@main
+    with:
+      provider: aws
+      config: configs/my-cluster
+      provider_config: configs/aws/my-cluster-us-east-1
+      action: provision
+      sops_age_recipient: age1...   # public key from step 1
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+      STATE_BUCKET_NAME: ${{ secrets.STATE_BUCKET_NAME }}
+```
+
+**6. Fetch cluster output** locally after a provision run:
+
+```bash
+cp scripts/fetch/.env.example scripts/fetch/.env  # fill in your values
+docker run --rm -e ACTION=fetch --env-file scripts/fetch/.env \
+  -v $(pwd)/output:/output sinanozel/k3s-anywhere:latest
+jq -r '.kubeconfig' output/my-cluster.json > ~/.kube/my-cluster.yaml
+```
+
+Steps 1 and 2 are one-time. Steps 3 and 4 are per-repo setup. Steps 5 and 6 are day-to-day.
+
+---
+
 ## First-time setup
 
 Run once per cloud account, locally, with admin credentials. This creates the Pulumi state bucket and a least-privilege IAM role for ongoing operations. Admin credentials are passed at invocation and never stored anywhere — by design, this step never runs in GitHub Actions.
@@ -152,6 +231,7 @@ jobs:
       config: configs/my-cluster
       provider_config: configs/exoscale/my-cluster-ch-gva-2
       action: provision
+      sops_age_recipient: age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p
     secrets: inherit
 
   deploy:
@@ -164,6 +244,22 @@ jobs:
         with:
           name: cluster-output-${{ needs.cluster.outputs.cluster_name }}
           path: output/
+
+      - name: Install sops and age
+        run: |
+          AGE_VERSION="1.2.1" SOPS_VERSION="3.10.2"
+          curl -fsSL "https://github.com/FiloSottile/age/releases/download/v${AGE_VERSION}/age-v${AGE_VERSION}-linux-amd64.tar.gz" \
+            | tar -xz -C /usr/local/bin --strip-components=1 age/age age/age-keygen
+          curl -fsSL "https://github.com/getsops/sops/releases/download/v${SOPS_VERSION}/sops-v${SOPS_VERSION}.linux.amd64" \
+            -o /usr/local/bin/sops && chmod +x /usr/local/bin/sops
+
+      - name: Decrypt cluster output
+        env:
+          SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
+        run: |
+          sops --decrypt \
+            output/${{ needs.cluster.outputs.cluster_name }}.json.enc \
+            > output/${{ needs.cluster.outputs.cluster_name }}.json
 
       - name: Apply manifests
         run: |
@@ -183,6 +279,7 @@ jobs:
       config: configs/my-cluster
       provider_config: configs/aws/my-cluster-us-east-1
       action: ${{ inputs.action }}
+      sops_age_recipient: age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -200,6 +297,95 @@ Required secrets in GitHub:
 | `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` | AWS |
 | `PULUMI_CONFIG_PASSPHRASE` | All |
 | `STATE_BUCKET_NAME` | All |
+| `SOPS_AGE_KEY` | All (when using `sops_age_recipient`) |
+
+## Securing cluster output
+
+The `provision` action writes `output/<cluster-name>.json`, which contains the cluster kubeconfig (cluster-admin credentials) and the backup bucket access key and secret. This file is uploaded as a GitHub Actions artifact so downstream jobs can consume it.
+
+GitHub artifact visibility follows the repository: public repos expose artifacts to any GitHub user. Encrypt the artifact before upload by passing an [age](https://github.com/FiloSottile/age) public key as `sops_age_recipient`. The cluster workflow encrypts the file with [sops](https://github.com/getsops/sops) before uploading; only the holder of the matching private key can decrypt it.
+
+### Generating a keypair
+
+Run once, locally. age ships inside the container — no local install needed:
+
+```bash
+docker run --rm --entrypoint age-keygen sinanozel/k3s-anywhere:latest
+```
+
+Output:
+
+```
+# created: 2026-01-01T00:00:00Z
+# public key: age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p
+AGE-SECRET-KEY-1QJEPRZS...
+```
+
+- **Public key** (`age1...`) → pass as `sops_age_recipient` in your workflow `with:` block. Safe to commit.
+- **Private key** (`AGE-SECRET-KEY-1...`) → store as `SOPS_AGE_KEY` in GitHub Secrets. Never commit.
+
+### Decrypting in a consumer job
+
+After downloading the artifact, install sops + age and decrypt with the private key:
+
+```yaml
+- uses: actions/download-artifact@v4
+  with:
+    name: cluster-output-${{ needs.cluster.outputs.cluster_name }}
+    path: output/
+
+- name: Install sops and age
+  run: |
+    AGE_VERSION="1.2.1" SOPS_VERSION="3.10.2"
+    curl -fsSL "https://github.com/FiloSottile/age/releases/download/v${AGE_VERSION}/age-v${AGE_VERSION}-linux-amd64.tar.gz" \
+      | tar -xz -C /usr/local/bin --strip-components=1 age/age age/age-keygen
+    curl -fsSL "https://github.com/getsops/sops/releases/download/v${SOPS_VERSION}/sops-v${SOPS_VERSION}.linux.amd64" \
+      -o /usr/local/bin/sops && chmod +x /usr/local/bin/sops
+
+- name: Decrypt cluster output
+  env:
+    SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
+  run: |
+    sops --decrypt \
+      output/${{ needs.cluster.outputs.cluster_name }}.json.enc \
+      > output/${{ needs.cluster.outputs.cluster_name }}.json
+```
+
+`sops_age_recipient` is optional. Omitting it uploads the JSON as plaintext, which is safe for private repositories where artifact access is restricted to collaborators.
+
+## Fetching cluster output locally
+
+`ACTION=fetch` downloads the latest cluster output artifact from GitHub Actions and decrypts it. It is built into the main container — no separate image needed.
+
+Fill in `scripts/fetch/.env` (copy from `.env.example`, gitignored):
+
+```
+GITHUB_TOKEN=ghp_...            # repo + actions read scopes
+GITHUB_REPO=your-org/your-app   # repo where the cluster workflow runs
+CLUSTER_NAME=my-cluster
+SOPS_AGE_KEY=AGE-SECRET-KEY-1...  # omit if artifact is not encrypted
+```
+
+Run:
+
+```bash
+mkdir -p output
+docker run --rm \
+  -e ACTION=fetch \
+  --env-file scripts/fetch/.env \
+  -v $(pwd)/output:/output \
+  sinanozel/k3s-anywhere:latest
+```
+
+The decrypted JSON lands at `output/<cluster-name>.json`. Extract the kubeconfig:
+
+```bash
+jq -r '.kubeconfig' output/my-cluster.json > ~/.kube/my-cluster.yaml
+export KUBECONFIG=~/.kube/my-cluster.yaml
+kubectl get nodes
+```
+
+The script finds the most recent non-expired artifact with that name. GitHub retains artifacts for 7 days; if the artifact has expired, re-run the provision workflow.
 
 ## Releasing the image
 
@@ -235,6 +421,9 @@ pulumi/
   aws/                ← Pulumi program: k3s on EC2
 
 scripts/
+  fetch/
+    fetch.sh          ← ACTION=fetch: download + decrypt cluster output artifact
+    .env.example      ← fill in and copy to .env (gitignored)
   exoscale/
     setup.sh          ← operator-run, admin credentials, never in CI
     cluster/
