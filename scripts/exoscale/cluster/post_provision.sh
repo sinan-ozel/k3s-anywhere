@@ -37,7 +37,7 @@ done
 
 echo "Waiting for k3s to be ready..."
 ELAPSED=0
-until $SSH "k3s kubectl get nodes --no-headers 2>/dev/null | grep -q Ready"; do
+until $SSH "sudo k3s kubectl get nodes --no-headers 2>/dev/null | grep -q Ready"; do
     sleep 15
     ELAPSED=$((ELAPSED + 15))
     [ $ELAPSED -lt 600 ] || { echo "Timeout waiting for k3s"; exit 1; }
@@ -46,7 +46,7 @@ done
 # ── Kubeconfig ────────────────────────────────────────────────────────────────
 
 echo "Retrieving kubeconfig..."
-$SSH "cat /etc/rancher/k3s/k3s.yaml" \
+$SSH "sudo cat /etc/rancher/k3s/k3s.yaml" \
     | sed "s/127.0.0.1/${SERVER_IP}/g" \
     > "$KUBECONFIG_FILE"
 chmod 600 "$KUBECONFIG_FILE"
