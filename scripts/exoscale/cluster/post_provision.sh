@@ -71,7 +71,7 @@ helm install longhorn longhorn/longhorn \
 
 kubectl patch storageclass local-path \
     -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}' \
-    --ignore-not-found
+  || true
 
 kubectl apply -f /app/manifests/longhorn/longhorn-storage-class.yaml
 
