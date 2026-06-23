@@ -73,7 +73,7 @@ kubectl patch storageclass local-path \
     -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}' \
   || true
 
-kubectl apply -f /app/manifests/longhorn/longhorn-storage-class.yaml
+kubectl replace --force -f /app/manifests/longhorn/longhorn-storage-class.yaml
 
 # ── Longhorn backup target ────────────────────────────────────────────────────
 
