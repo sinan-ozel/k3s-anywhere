@@ -73,13 +73,14 @@ helm upgrade --install longhorn longhorn/longhorn \
     --create-namespace \
     --version "${LONGHORN_VERSION}" \
     --set defaultSettings.defaultReplicaCount="${REPLICA_COUNT}" \
+    --set defaultSettings.staleReplicaTimeout=2880 \
+    --set persistence.defaultClass=true \
+    --set persistence.reclaimPolicy=Retain \
     --wait --timeout 10m
 
 kubectl patch storageclass local-path \
     -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}' \
   || true
-
-kubectl replace --force -f /app/manifests/longhorn/longhorn-storage-class.yaml
 
 # ── Longhorn backup target (AWS S3) ───────────────────────────────────────────
 
