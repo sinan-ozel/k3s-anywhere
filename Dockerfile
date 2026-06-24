@@ -3,7 +3,7 @@ FROM python:3.11-slim
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl openssh-client git jq unzip \
+    curl openssh-client git jq unzip wamerican \
     && rm -rf /var/lib/apt/lists/*
 
 # Helm

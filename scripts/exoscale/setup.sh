@@ -80,21 +80,25 @@ KEY_OUTPUT=$(exo iam api-key create "${KEY_NAME}" --role "${ROLE_NAME}" --output
 API_KEY=$(echo "$KEY_OUTPUT" | jq -r '.key')
 API_SECRET=$(echo "$KEY_OUTPUT" | jq -r '.secret')
 
+# ── Passphrase ────────────────────────────────────────────────────────────────
+
+PULUMI_CONFIG_PASSPHRASE="${PULUMI_CONFIG_PASSPHRASE:-$(python3 -c "import secrets,re; w=re.findall(r'\b[a-z]{4,7}\b', open('/usr/share/dict/words').read()); print('-'.join(secrets.choice(w) for _ in range(4)))")}"
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 
 echo ""
 echo "=== Add the following to GitHub Secrets ==="
+echo "EXOSCALE_API_KEY=${API_KEY}"
+echo "EXOSCALE_API_SECRET=${API_SECRET}"
+echo "STATE_BUCKET_NAME=${BUCKET}"
+echo "PULUMI_CONFIG_PASSPHRASE=${PULUMI_CONFIG_PASSPHRASE}"
+echo "==="
 echo ""
-echo "  EXOSCALE_API_KEY     = ${API_KEY}"
-echo "  EXOSCALE_API_SECRET  = ${API_SECRET}"
-echo "  STATE_BUCKET_NAME    = ${BUCKET}"
-echo "  PULUMI_CONFIG_PASSPHRASE = <choose a strong passphrase>"
-echo ""
-echo "=== Add to your local .env.secrets ==="
-echo ""
-echo "  EXOSCALE_API_KEY=${API_KEY}"
-echo "  EXOSCALE_API_SECRET=${API_SECRET}"
-echo "  STATE_BUCKET_NAME=${BUCKET}"
-echo "  PULUMI_CONFIG_PASSPHRASE=<same passphrase>"
+echo "=== Copy into .env.secrets ==="
+echo "EXOSCALE_API_KEY=${API_KEY}"
+echo "EXOSCALE_API_SECRET=${API_SECRET}"
+echo "STATE_BUCKET_NAME=${BUCKET}"
+echo "PULUMI_CONFIG_PASSPHRASE=${PULUMI_CONFIG_PASSPHRASE}"
+echo "==="
 echo ""
 echo "Setup complete."

@@ -74,8 +74,8 @@ jobs:
             || error "ACTION=setup creates IAM credentials and must be run locally with admin credentials, never in CI. See README → First-time setup."
           [ "${{ inputs.action }}" != "purge" ] \
             || error "ACTION=purge deletes IAM credentials and must be run locally with admin credentials, never in CI. See README → Purging the setup."
-          [ -f "configs/${{ inputs.config }}.env" ] \
-            || error "Config file configs/${{ inputs.config }}.env not found."
+          [ -f "${{ inputs.config }}.env" ] \
+            || error "Config file ${{ inputs.config }}.env not found."
           if [ -n "${{ inputs.provider_config }}" ]; then
             [ -f "${{ inputs.provider_config }}.env" ] \
               || error "Provider config file ${{ inputs.provider_config }}.env not found."
@@ -84,11 +84,11 @@ jobs:
       - name: Load config
         id: load-config
         run: |
-          grep -v '^#' "configs/${{ inputs.config }}.env" | grep '=' >> "$GITHUB_ENV"
+          grep -v '^#' "${{ inputs.config }}.env" | grep '=' >> "$GITHUB_ENV"
           if [ -n "${{ inputs.provider_config }}" ]; then
             grep -v '^#' "${{ inputs.provider_config }}.env" | grep '=' >> "$GITHUB_ENV"
           fi
-          CLUSTER_NAME=$(grep '^CLUSTER_NAME=' "configs/${{ inputs.config }}.env" | cut -d= -f2)
+          CLUSTER_NAME=$(grep '^CLUSTER_NAME=' "${{ inputs.config }}.env" | cut -d= -f2)
           echo "cluster_name=${CLUSTER_NAME}" >> "$GITHUB_OUTPUT"
 
       - name: Create output directory
@@ -101,7 +101,7 @@ jobs:
             PROVIDER_ENV_ARG="--env-file ${{ inputs.provider_config }}.env"
           fi
           docker run --rm \
-            --env-file "configs/${{ inputs.config }}.env" \
+            --env-file "${{ inputs.config }}.env" \
             ${PROVIDER_ENV_ARG} \
             -e ACTION="${{ inputs.action }}" \
             -e PROVIDER="${{ inputs.provider }}" \

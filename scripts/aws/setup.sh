@@ -102,23 +102,27 @@ KEY_OUTPUT=$(aws iam create-access-key --user-name "${USER_NAME}")
 ACCESS_KEY=$(echo "$KEY_OUTPUT" | jq -r '.AccessKey.AccessKeyId')
 SECRET_KEY=$(echo "$KEY_OUTPUT" | jq -r '.AccessKey.SecretAccessKey')
 
+# ── Passphrase ────────────────────────────────────────────────────────────────
+
+PULUMI_CONFIG_PASSPHRASE="${PULUMI_CONFIG_PASSPHRASE:-$(python3 -c "import secrets,re; w=re.findall(r'\b[a-z]{4,7}\b', open('/usr/share/dict/words').read()); print('-'.join(secrets.choice(w) for _ in range(4)))")}"
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 
 echo ""
 echo "=== Add the following to GitHub Secrets ==="
+echo "AWS_ACCESS_KEY_ID=${ACCESS_KEY}"
+echo "AWS_SECRET_ACCESS_KEY=${SECRET_KEY}"
+echo "STATE_BUCKET_NAME=${BUCKET}"
+echo "PULUMI_CONFIG_PASSPHRASE=${PULUMI_CONFIG_PASSPHRASE}"
+echo "==="
 echo ""
-echo "  AWS_ACCESS_KEY_ID     = ${ACCESS_KEY}"
-echo "  AWS_SECRET_ACCESS_KEY = ${SECRET_KEY}"
-echo "  AWS_REGION            = ${REGION}"
-echo "  STATE_BUCKET_NAME     = ${BUCKET}"
-echo "  PULUMI_CONFIG_PASSPHRASE = <choose a strong passphrase>"
+echo "Note: AWS_REGION belongs in your provider config file (e.g. configs/aws/my-cluster-us-east-1.env), not in GitHub Secrets."
 echo ""
-echo "=== Add to your local .env.secrets ==="
-echo ""
-echo "  AWS_ACCESS_KEY_ID=${ACCESS_KEY}"
-echo "  AWS_SECRET_ACCESS_KEY=${SECRET_KEY}"
-echo "  AWS_REGION=${REGION}"
-echo "  STATE_BUCKET_NAME=${BUCKET}"
-echo "  PULUMI_CONFIG_PASSPHRASE=<same passphrase>"
+echo "=== Copy into .env.secrets ==="
+echo "AWS_ACCESS_KEY_ID=${ACCESS_KEY}"
+echo "AWS_SECRET_ACCESS_KEY=${SECRET_KEY}"
+echo "STATE_BUCKET_NAME=${BUCKET}"
+echo "PULUMI_CONFIG_PASSPHRASE=${PULUMI_CONFIG_PASSPHRASE}"
+echo "==="
 echo ""
 echo "Setup complete."
