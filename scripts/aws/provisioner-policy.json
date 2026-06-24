@@ -39,7 +39,8 @@
         "iam:DeleteUserPolicy",
         "iam:CreateAccessKey",
         "iam:DeleteAccessKey",
-        "iam:ListAccessKeys"
+        "iam:ListAccessKeys",
+        "iam:ListGroupsForUser"
       ],
       "Resource": "arn:aws:iam::{{ACCOUNT_ID}}:user/*-backup"
     }

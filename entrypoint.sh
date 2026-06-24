@@ -161,6 +161,6 @@ case "$ACTION" in
     pulumi refresh --yes --non-interactive
     ;;
   reset)
-    pulumi stack rm "${CLUSTER_NAME}" --yes --non-interactive || true
+    pulumi stack rm "${CLUSTER_NAME}" --yes --force --non-interactive || true
     ;;
 esac

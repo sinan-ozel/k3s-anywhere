@@ -21,13 +21,13 @@ def main():
         [
             "kubectl", "--kubeconfig", kubeconfig,
             "get", "svc", "--all-namespaces",
-            "-o", "jsonpath={range .items[?(@.spec.type=='LoadBalancer')]}{.metadata.namespace}/{.metadata.name}\\n{end}",
+            "-o", "jsonpath={range .items[?(@.spec.type=='LoadBalancer')]}{.metadata.namespace}/{.metadata.name} {end}",
         ],
         capture_output=True,
         text=True,
     )
 
-    services = [s for s in result.stdout.strip().splitlines() if s]
+    services = result.stdout.split()
     if not services:
         print("No LoadBalancer services found.")
         return
