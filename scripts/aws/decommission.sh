@@ -3,14 +3,14 @@
 # Run locally with admin credentials (requires -it for the confirmation prompt):
 #
 #   docker run --rm -it \
-#     -e ACTION=purge -e PROVIDER=aws -e AWS_REGION=us-east-1 \
+#     -e ACTION=decommission -e PROVIDER=aws -e AWS_REGION=us-east-1 \
 #     -v ~/.aws:/root/.aws:ro \
 #     sinanozel/k3s-anywhere:latest
 #
 # Skip the prompt (e.g. in a script):
 #
 #   docker run --rm \
-#     -e ACTION=purge -e PROVIDER=aws -e AWS_REGION=us-east-1 \
+#     -e ACTION=decommission -e PROVIDER=aws -e AWS_REGION=us-east-1 \
 #     -e FORCE=true \
 #     -v ~/.aws:/root/.aws:ro \
 #     sinanozel/k3s-anywhere:latest
@@ -20,7 +20,7 @@
 # leaves orphaned infrastructure with no way to clean it up via Pulumi.
 #
 # IMPORTANT: Keep in sync with setup.sh. Anything setup.sh creates,
-# purge.sh must delete. See the MANAGED_POLICIES array in particular.
+# decommission.sh must delete. See the MANAGED_POLICIES array in particular.
 set -euo pipefail
 
 REGION="${AWS_REGION:-us-east-1}"
@@ -33,7 +33,7 @@ POLICY_NAME="k3s-anywhere-provisioner-policy"
 # AWS-managed policies attached by setup.sh — must match setup.sh exactly.
 MANAGED_POLICIES=()
 
-echo "=== k3s-anywhere purge: AWS ==="
+echo "=== k3s-anywhere decommission: AWS ==="
 echo "Region:       ${REGION}"
 echo "Account:      ${ACCOUNT_ID}"
 echo "IAM user:     ${USER_NAME}"

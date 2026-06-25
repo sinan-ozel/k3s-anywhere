@@ -72,8 +72,8 @@ jobs:
           [ -n "${{ inputs.action }}"   ] || error "action is required."
           [ "${{ inputs.action }}" != "setup" ] \
             || error "ACTION=setup creates IAM credentials and must be run locally with admin credentials, never in CI. See README → First-time setup."
-          [ "${{ inputs.action }}" != "purge" ] \
-            || error "ACTION=purge deletes IAM credentials and must be run locally with admin credentials, never in CI. See README → Purging the setup."
+          [ "${{ inputs.action }}" != "decommission" ] \
+            || error "ACTION=decommission deletes IAM credentials and must be run locally with admin credentials, never in CI. See README → Purging the setup."
           [ -f "${{ inputs.config }}.env" ] \
             || error "Config file ${{ inputs.config }}.env not found."
           if [ -n "${{ inputs.provider_config }}" ]; then

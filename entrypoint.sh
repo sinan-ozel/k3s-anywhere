@@ -5,11 +5,11 @@ error() { echo "ERROR: $1" >&2; exit 1; }
 
 # ── Validation ────────────────────────────────────────────────────────────────
 
-[ -n "${ACTION:-}" ] || error "ACTION is not set. Valid: setup | purge | fetch | provision | teardown | refresh | reset"
+[ -n "${ACTION:-}" ] || error "ACTION is not set. Valid: setup | decommission | fetch | provision | teardown | refresh | reset"
 
 case "$ACTION" in
-  setup|purge|fetch|provision|teardown|refresh|reset) ;;
-  *) error "Unknown ACTION '${ACTION}'. Valid: setup | purge | fetch | provision | teardown | refresh | reset" ;;
+  setup|decommission|fetch|provision|teardown|refresh|reset) ;;
+  *) error "Unknown ACTION '${ACTION}'. Valid: setup | decommission | fetch | provision | teardown | refresh | reset" ;;
 esac
 
 # ── Provider-agnostic actions ─────────────────────────────────────────────────
@@ -33,10 +33,10 @@ if [ "$ACTION" = "setup" ]; then
   exec "/app/scripts/${PROVIDER}/setup.sh"
 fi
 
-if [ "$ACTION" = "purge" ]; then
-  [ -f "/app/scripts/${PROVIDER}/purge.sh" ] \
+if [ "$ACTION" = "decommission" ]; then
+  [ -f "/app/scripts/${PROVIDER}/decommission.sh" ] \
     || error "Purge is not implemented for provider '${PROVIDER}'."
-  exec "/app/scripts/${PROVIDER}/purge.sh"
+  exec "/app/scripts/${PROVIDER}/decommission.sh"
 fi
 
 [ -n "${CLUSTER_NAME:-}" ] || error "CLUSTER_NAME is not set."

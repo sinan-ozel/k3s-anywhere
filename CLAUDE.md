@@ -27,7 +27,7 @@ on Docker Hub it will fail. Always cut a new version rather than re-tagging.
 
 ## General rules
 
-- `ACTION=setup` and `ACTION=purge` are operator-only, never in CI.
+- `ACTION=setup` and `ACTION=decommission` are operator-only, never in CI.
 - Admin credentials are passed at invocation; they are never stored or committed.
-- The `MANAGED_POLICIES` array in `setup.sh` must stay in sync with `purge.sh`.
+- The `MANAGED_POLICIES` array in `setup.sh` must stay in sync with `decommission.sh`.
 - Dev builds (`0.1.x-dev.N`) never move `:latest`; only stable releases do.
