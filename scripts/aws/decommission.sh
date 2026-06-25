@@ -45,24 +45,29 @@ echo ""
 if aws s3api head-bucket --bucket "${BUCKET}" 2>/dev/null; then
     OBJECT_COUNT=$(aws s3api list-objects-v2 --bucket "${BUCKET}" \
         --query 'KeyCount' --output text 2>/dev/null || echo "0")
+    OBJECT_COUNT="${OBJECT_COUNT/None/0}"
     if [ "${OBJECT_COUNT}" -gt 0 ]; then
         echo "WARNING: state bucket '${BUCKET}' contains ${OBJECT_COUNT} object(s)."
         echo "         Active Pulumi stacks (live clusters) may still exist."
-        echo "         Run ACTION=teardown for each cluster before purging, or"
+        echo "         Run ACTION=teardown for each cluster before decommissioning, or"
         echo "         you will lose the ability to manage them via Pulumi."
         echo ""
     fi
 fi
 
 # ── Confirmation ──────────────────────────────────────────────────────────────
+# Pass CONFIRM=<iam-username> as an env var to confirm without a TTY.
+# Pass FORCE=true to skip confirmation entirely (use in scripts).
 
 if [ "${FORCE:-false}" != "true" ]; then
     echo "This will permanently delete:"
     echo "  IAM user    ${USER_NAME} (access keys, inline policy, managed policies)"
     echo "  S3 bucket   s3://${BUCKET} (and all contents)"
     echo ""
-    printf 'Type "%s" to confirm: ' "${USER_NAME}"
-    read -r CONFIRM
+    if [ -z "${CONFIRM:-}" ]; then
+        printf 'Type "%s" to confirm (or set CONFIRM env var): ' "${USER_NAME}"
+        read -r CONFIRM < /dev/tty
+    fi
     if [ "${CONFIRM}" != "${USER_NAME}" ]; then
         echo "Aborted."
         exit 1
