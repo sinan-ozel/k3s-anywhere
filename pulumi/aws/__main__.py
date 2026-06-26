@@ -88,6 +88,8 @@ sg = aws.ec2.SecurityGroup(
         aws.ec2.SecurityGroupIngressArgs(from_port=8472,  to_port=8472,  protocol="udp", cidr_blocks=["0.0.0.0/0"]),
         aws.ec2.SecurityGroupIngressArgs(from_port=9500,  to_port=9520,  protocol="tcp", cidr_blocks=["0.0.0.0/0"]),
         aws.ec2.SecurityGroupIngressArgs(from_port=10250, to_port=10250, protocol="tcp", cidr_blocks=["0.0.0.0/0"]),
+        # etcd peer/client — required for k3s HA embedded etcd, VPC-only
+        aws.ec2.SecurityGroupIngressArgs(from_port=2379,  to_port=2380,  protocol="tcp", cidr_blocks=["10.0.0.0/16"]),
     ],
     egress=[
         aws.ec2.SecurityGroupEgressArgs(from_port=0, to_port=0, protocol="-1", cidr_blocks=["0.0.0.0/0"]),
@@ -145,6 +147,7 @@ runcmd:
     PUBLIC_IP=$(curl -sf -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" http://169.254.169.254/latest/meta-data/public-ipv4)
     PUBLIC_DNS=$(curl -sf -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" http://169.254.169.254/latest/meta-data/public-hostname || true)
     [ -n "$PUBLIC_DNS" ] && EXTRA_SAN="--tls-san $PUBLIC_DNS" || EXTRA_SAN=""
+    until curl -sfk https://{server_ip}:6443/readyz >/dev/null 2>&1; do sleep 5; done
     curl -sfL https://get.k3s.io | \\
       INSTALL_K3S_VERSION="{K3S_VERSION}" \\
       K3S_TOKEN="{token}" \\

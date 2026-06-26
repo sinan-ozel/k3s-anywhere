@@ -35,7 +35,7 @@ fi
 
 if [ "$ACTION" = "decommission" ]; then
   [ -f "/app/scripts/${PROVIDER}/decommission.sh" ] \
-    || error "Purge is not implemented for provider '${PROVIDER}'."
+    || error "Decommission is not implemented for provider '${PROVIDER}'."
   exec "/app/scripts/${PROVIDER}/decommission.sh"
 fi
 

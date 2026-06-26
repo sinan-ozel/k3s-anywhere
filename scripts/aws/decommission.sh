@@ -117,4 +117,4 @@ else
 fi
 
 echo ""
-echo "Purge complete."
+echo "Decommission complete."
