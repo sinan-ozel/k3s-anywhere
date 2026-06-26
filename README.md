@@ -458,6 +458,7 @@ configs/
 | `USE_PUBLIC_DNS` | no (default `false`) | AWS, Azure: use the cloud-assigned public DNS name in the kubeconfig and `api_endpoint` instead of the IP. The TLS certificate always covers both, so either works. Ignored on Exoscale and GCP. |
 | `K3S_VERSION` | no (default `v1.31.4+k3s1`) | k3s release to install on all nodes. |
 | `LONGHORN_VERSION` | no (default `1.7.2`) | Longhorn Helm chart version to install. |
+| `DISK_SIZE_GB` | no (default `25`) | Root disk size in GB for each node. Increase if Longhorn storage budget is exhausted. |
 
 **Provider overrides** (`configs/<provider>/<name>.env`):
 

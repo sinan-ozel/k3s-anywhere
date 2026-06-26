@@ -11,6 +11,7 @@ GPU_NODES      = int(os.environ.get("GPU_NODE_COUNT", "0"))
 PORT           = int(os.environ["PORT"])
 ZONE           = os.environ["EXOSCALE_ZONE"]
 K3S_VERSION    = os.environ.get("K3S_VERSION", "v1.31.4+k3s1")
+DISK_SIZE_GB   = int(os.environ.get("DISK_SIZE_GB", "25"))
 
 # ── SSH key ───────────────────────────────────────────────────────────────────
 
@@ -125,7 +126,7 @@ runcmd:
 
 _common = dict(
     zone=ZONE,
-    disk_size=50,
+    disk_size=DISK_SIZE_GB,
     security_group_ids=[sg.id],
     ssh_key=exo_ssh_key.name,
     template_id=ubuntu.id,

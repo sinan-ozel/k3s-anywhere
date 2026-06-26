@@ -61,8 +61,7 @@ export KUBECONFIG="$KUBECONFIG_FILE"
 # ── Longhorn ──────────────────────────────────────────────────────────────────
 
 TOTAL_NODES=$((DEFAULT_NODE_COUNT + GPU_NODE_COUNT))
-REPLICA_COUNT=1
-[ "$TOTAL_NODES" -ge 3 ] && REPLICA_COUNT=3
+REPLICA_COUNT=$(( TOTAL_NODES < 3 ? TOTAL_NODES : 3 ))
 
 echo "Installing Longhorn ${LONGHORN_VERSION} (replicas: ${REPLICA_COUNT})..."
 helm repo add longhorn https://charts.longhorn.io

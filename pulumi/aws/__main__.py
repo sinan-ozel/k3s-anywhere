@@ -12,6 +12,7 @@ GPU_NODES      = int(os.environ.get("GPU_NODE_COUNT", "0"))
 PORT           = int(os.environ["PORT"])
 REGION         = os.environ["AWS_REGION"]
 K3S_VERSION    = os.environ.get("K3S_VERSION", "v1.31.4+k3s1")
+DISK_SIZE_GB   = int(os.environ.get("DISK_SIZE_GB", "25"))
 # S3 bucket names are global. If <CLUSTER_NAME>-backups is already taken by
 # another account, set BUCKET_PREFIX to a unique value (e.g. your org name
 # followed by a dash). The provisioner IAM policy in setup.sh covers *-backups,
@@ -176,7 +177,7 @@ _common = dict(
     subnet_id=subnet.id,
     vpc_security_group_ids=[sg.id],
     key_name=key_pair.key_name,
-    root_block_device=aws.ec2.InstanceRootBlockDeviceArgs(volume_size=50, volume_type="gp3"),
+    root_block_device=aws.ec2.InstanceRootBlockDeviceArgs(volume_size=DISK_SIZE_GB, volume_type="gp3"),
 )
 
 server_0_init = k3s_token.result.apply(cloud_init_server_0)
