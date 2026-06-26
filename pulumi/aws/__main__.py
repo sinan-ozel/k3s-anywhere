@@ -147,7 +147,7 @@ runcmd:
     PUBLIC_IP=$(curl -sf -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" http://169.254.169.254/latest/meta-data/public-ipv4)
     PUBLIC_DNS=$(curl -sf -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" http://169.254.169.254/latest/meta-data/public-hostname || true)
     [ -n "$PUBLIC_DNS" ] && EXTRA_SAN="--tls-san $PUBLIC_DNS" || EXTRA_SAN=""
-    until curl -sfk https://{server_ip}:6443/readyz >/dev/null 2>&1; do sleep 5; done
+    until nc -z {server_ip} 6443 2>/dev/null; do sleep 5; done
     curl -sfL https://get.k3s.io | \\
       INSTALL_K3S_VERSION="{K3S_VERSION}" \\
       K3S_TOKEN="{token}" \\
