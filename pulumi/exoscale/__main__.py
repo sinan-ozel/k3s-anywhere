@@ -46,6 +46,7 @@ _sg_rules = [
     ("flannel-vxlan",     "UDP", 8472, 8472),
     ("longhorn-rep",      "TCP", 9500, 9520),
     ("kubelet",           "TCP", 10250, 10250),
+    ("etcd",              "TCP", 2379, 2380),
 ]
 
 for name, proto, start, end in _sg_rules:
@@ -101,6 +102,7 @@ runcmd:
   - |
     PUBLIC_IP=$(curl -sf http://169.254.169.254/1.0/meta-data/public-ipv4 || \
                 curl -sf http://169.254.169.254/latest/meta-data/public-ipv4)
+    until nc -z {server_ip} 6443 2>/dev/null; do sleep 5; done
     curl -sfL https://get.k3s.io | \\
       INSTALL_K3S_VERSION="{K3S_VERSION}" \\
       K3S_TOKEN="{token}" \\
