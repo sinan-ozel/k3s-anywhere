@@ -11,8 +11,11 @@ LONGHORN_VERSION="${LONGHORN_VERSION:-1.7.2}"
 
 SERVER_IP=$(jq -r '.server_public_ips[0]' "$INFRA")
 SERVER_DNS=$(jq -r '.server_public_dns[0] // empty' "$INFRA")
+ELASTIC_IP_ADDR=$(jq -r '.elastic_ip // empty' "$INFRA")
 
-if [ "${USE_PUBLIC_DNS:-false}" = "true" ] && [ -n "$SERVER_DNS" ]; then
+if [ -n "$ELASTIC_IP_ADDR" ]; then
+    SERVER_ADDR="$ELASTIC_IP_ADDR"
+elif [ "${USE_PUBLIC_DNS:-false}" = "true" ] && [ -n "$SERVER_DNS" ]; then
     SERVER_ADDR="$SERVER_DNS"
 else
     SERVER_ADDR="$SERVER_IP"
@@ -26,11 +29,12 @@ echo "$SSH_KEY" > "$KEY_FILE"
 chmod 600 "$KEY_FILE"
 install -m 600 "$KEY_FILE" "/app/output/${CLUSTER_NAME}-ssh.pem"
 
-SSH="ssh -i $KEY_FILE -o StrictHostKeyChecking=no -o ConnectTimeout=10 ubuntu@${SERVER_IP}"
+SSH_HOST="${ELASTIC_IP_ADDR:-$SERVER_IP}"
+SSH="ssh -i $KEY_FILE -o StrictHostKeyChecking=no -o ConnectTimeout=10 ubuntu@${SSH_HOST}"
 
 # ── Wait for SSH ──────────────────────────────────────────────────────────────
 
-echo "Waiting for SSH on ${SERVER_IP}..."
+echo "Waiting for SSH on ${SSH_HOST}..."
 MAX_WAIT=300
 ELAPSED=0
 until $SSH "echo ok" &>/dev/null; do
@@ -122,12 +126,14 @@ jq -n \
     --arg  backup_endpoint   "" \
     --arg  backup_access_key "${BACKUP_ACCESS_KEY}" \
     --arg  backup_secret_key "${BACKUP_SECRET_KEY}" \
+    --arg  elastic_ip        "${ELASTIC_IP_ADDR}" \
     '{
         schema_version:    $schema_version,
         cluster_name:      $cluster_name,
         provider:          $provider,
         region:            $region,
         api_endpoint:      $api_endpoint,
+        elastic_ip:        $elastic_ip,
         kubeconfig:        $kubeconfig,
         server_public_ips: $server_ips,
         gpu_public_ips:    $gpu_ips,

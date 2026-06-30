@@ -12,6 +12,7 @@ PORT           = int(os.environ["PORT"])
 ZONE           = os.environ["EXOSCALE_ZONE"]
 K3S_VERSION    = os.environ.get("K3S_VERSION", "v1.31.4+k3s1")
 DISK_SIZE_GB   = int(os.environ.get("DISK_SIZE_GB", "25"))
+ELASTIC_IP     = int(os.environ.get("ELASTIC_IP", "0"))
 
 # ── SSH key ───────────────────────────────────────────────────────────────────
 
@@ -80,7 +81,8 @@ def _base_packages() -> str:
           - curl
         """)
 
-def cloud_init_server_0(token: str) -> str:
+def cloud_init_server_0(token: str, extra_san: str = "") -> str:
+    eip_san = f"--tls-san {extra_san}" if extra_san else ""
     return f"""#cloud-config
 {_base_packages()}
 runcmd:
@@ -91,7 +93,7 @@ runcmd:
     curl -sfL https://get.k3s.io | \\
       INSTALL_K3S_VERSION="{K3S_VERSION}" \\
       K3S_TOKEN="{token}" \\
-      sh -s - server --cluster-init --tls-san "$PUBLIC_IP"
+      sh -s - server --cluster-init --tls-san "$PUBLIC_IP" {eip_san}
 """
 
 def cloud_init_server_join(token: str, server_ip: str) -> str:
@@ -134,20 +136,35 @@ _common = dict(
     template_id=ubuntu.id,
 )
 
-server_0_init = k3s_token.result.apply(cloud_init_server_0)
+eip = exoscale.ElasticIp(f"{CLUSTER_NAME}-eip", zone=ZONE) if ELASTIC_IP else None
+
+server_0_init = (
+    pulumi.Output.all(k3s_token.result, eip.ip_address).apply(
+        lambda args: cloud_init_server_0(args[0], extra_san=args[1])
+    )
+    if eip
+    else k3s_token.result.apply(cloud_init_server_0)
+)
 
 server_0 = exoscale.ComputeInstance(
     f"{CLUSTER_NAME}-server-0",
     name=f"{CLUSTER_NAME}-server-0",
     type="standard.medium",
     user_data=server_0_init,
+    elastic_ip_ids=[eip.id] if eip else None,
     **_common,
 )
+
+# The EIP is attached as part of server_0's own creation, so any node that
+# joins afterward needs an explicit dependency on server_0 — it otherwise
+# only depends on eip.ip_address, which resolves before the attachment does.
+server_0_address = eip.ip_address if eip else server_0.public_ip_address
+_join_opts = pulumi.ResourceOptions(depends_on=[server_0]) if eip else None
 
 server_nodes = [server_0]
 
 for i in range(1, DEFAULT_NODES):
-    init = pulumi.Output.all(k3s_token.result, server_0.public_ip_address).apply(
+    init = pulumi.Output.all(k3s_token.result, server_0_address).apply(
         lambda args: cloud_init_server_join(args[0], args[1])
     )
     node = exoscale.ComputeInstance(
@@ -155,6 +172,7 @@ for i in range(1, DEFAULT_NODES):
         name=f"{CLUSTER_NAME}-server-{i}",
         type="standard.medium",
         user_data=init,
+        opts=_join_opts,
         **_common,
     )
     server_nodes.append(node)
@@ -162,7 +180,7 @@ for i in range(1, DEFAULT_NODES):
 gpu_node_list = []
 
 for i in range(GPU_NODES):
-    init = pulumi.Output.all(k3s_token.result, server_0.public_ip_address).apply(
+    init = pulumi.Output.all(k3s_token.result, server_0_address).apply(
         lambda args: cloud_init_agent(args[0], args[1], gpu=True)
     )
     node = exoscale.ComputeInstance(
@@ -170,6 +188,7 @@ for i in range(GPU_NODES):
         name=f"{CLUSTER_NAME}-gpu-{i}",
         type="gpua30.small",
         user_data=init,
+        opts=_join_opts,
         **_common,
     )
     gpu_node_list.append(node)
@@ -209,6 +228,7 @@ pulumi.export("cluster_name",     CLUSTER_NAME)
 pulumi.export("provider",         "exoscale")
 pulumi.export("region",           ZONE)
 pulumi.export("server_public_ips", server_ips)
+pulumi.export("elastic_ip",        eip.ip_address if eip else "")
 pulumi.export("gpu_public_ips",    gpu_ips)
 pulumi.export("default_node_count", DEFAULT_NODES)
 pulumi.export("gpu_node_count",    GPU_NODES)

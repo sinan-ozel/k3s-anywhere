@@ -10,6 +10,8 @@ LONGHORN_VERSION="${LONGHORN_VERSION:-1.7.2}"
 # ── Extract infra outputs ─────────────────────────────────────────────────────
 
 SERVER_IP=$(jq -r '.server_public_ips[0]' "$INFRA")
+ELASTIC_IP_ADDR=$(jq -r '.elastic_ip // empty' "$INFRA")
+SERVER_ADDR="${ELASTIC_IP_ADDR:-$SERVER_IP}"
 SSH_KEY=$(jq -r '.ssh_private_key' "$INFRA")
 BACKUP_BUCKET=$(jq -r '.backup_bucket' "$INFRA")
 BACKUP_ENDPOINT=$(jq -r '.backup_endpoint' "$INFRA")
@@ -47,7 +49,7 @@ done
 
 echo "Retrieving kubeconfig..."
 $SSH "sudo cat /etc/rancher/k3s/k3s.yaml" \
-    | sed "s/127.0.0.1/${SERVER_IP}/g" \
+    | sed "s/127.0.0.1/${SERVER_ADDR}/g" \
     > "$KUBECONFIG_FILE"
 chmod 600 "$KUBECONFIG_FILE"
 export KUBECONFIG="$KUBECONFIG_FILE"
@@ -103,7 +105,7 @@ jq -n \
     --arg  cluster_name      "${CLUSTER_NAME}" \
     --arg  provider          "exoscale" \
     --arg  region            "${REGION}" \
-    --arg  api_endpoint      "https://${SERVER_IP}:6443" \
+    --arg  api_endpoint      "https://${SERVER_ADDR}:6443" \
     --arg  kubeconfig        "${KUBECONFIG_CONTENT}" \
     --argjson server_ips     "${SERVER_IPS}" \
     --argjson gpu_ips        "${GPU_IPS}" \
@@ -117,12 +119,14 @@ jq -n \
     --arg  backup_endpoint   "${BACKUP_ENDPOINT}" \
     --arg  backup_access_key "${BACKUP_ACCESS_KEY}" \
     --arg  backup_secret_key "${BACKUP_SECRET_KEY}" \
+    --arg  elastic_ip        "${ELASTIC_IP_ADDR}" \
     '{
         schema_version:    $schema_version,
         cluster_name:      $cluster_name,
         provider:          $provider,
         region:            $region,
         api_endpoint:      $api_endpoint,
+        elastic_ip:        $elastic_ip,
         kubeconfig:        $kubeconfig,
         server_public_ips: $server_ips,
         gpu_public_ips:    $gpu_ips,

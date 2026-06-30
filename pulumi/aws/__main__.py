@@ -13,6 +13,7 @@ PORT           = int(os.environ["PORT"])
 REGION         = os.environ["AWS_REGION"]
 K3S_VERSION    = os.environ.get("K3S_VERSION", "v1.31.4+k3s1")
 DISK_SIZE_GB   = int(os.environ.get("DISK_SIZE_GB", "25"))
+ELASTIC_IP     = int(os.environ.get("ELASTIC_IP", "0"))
 # S3 bucket names are global. If <CLUSTER_NAME>-backups is already taken by
 # another account, set BUCKET_PREFIX to a unique value (e.g. your org name
 # followed by a dash). The provisioner IAM policy in setup.sh covers *-backups,
@@ -122,7 +123,8 @@ def _base_packages() -> str:
           - curl
         """)
 
-def cloud_init_server_0(token: str) -> str:
+def cloud_init_server_0(token: str, extra_san: str = "") -> str:
+    eip_san = f"--tls-san {extra_san}" if extra_san else ""
     return f"""#cloud-config
 {_base_packages()}
 runcmd:
@@ -135,7 +137,7 @@ runcmd:
     curl -sfL https://get.k3s.io | \\
       INSTALL_K3S_VERSION="{K3S_VERSION}" \\
       K3S_TOKEN="{token}" \\
-      sh -s - server --cluster-init --tls-san "$PUBLIC_IP" $EXTRA_SAN
+      sh -s - server --cluster-init --tls-san "$PUBLIC_IP" {eip_san} $EXTRA_SAN
 """
 
 def cloud_init_server_join(token: str, server_ip: str) -> str:
@@ -180,7 +182,19 @@ _common = dict(
     root_block_device=aws.ec2.InstanceRootBlockDeviceArgs(volume_size=DISK_SIZE_GB, volume_type="gp3"),
 )
 
-server_0_init = k3s_token.result.apply(cloud_init_server_0)
+eip = aws.ec2.Eip(
+    f"{CLUSTER_NAME}-eip",
+    domain="vpc",
+    tags={"Name": f"{CLUSTER_NAME}-eip", "k3s-anywhere": CLUSTER_NAME},
+) if ELASTIC_IP else None
+
+server_0_init = (
+    pulumi.Output.all(k3s_token.result, eip.public_ip).apply(
+        lambda args: cloud_init_server_0(args[0], extra_san=args[1])
+    )
+    if eip
+    else k3s_token.result.apply(cloud_init_server_0)
+)
 
 server_0 = aws.ec2.Instance(
     f"{CLUSTER_NAME}-server-0",
@@ -190,10 +204,22 @@ server_0 = aws.ec2.Instance(
     **_common,
 )
 
+# Elastic IP replaces the instance's dynamic public IP the moment it is
+# associated, so any node that joins afterward must dial the EIP, not
+# server_0.public_ip (which is no longer routable once associated).
+eip_assoc = aws.ec2.EipAssociation(
+    f"{CLUSTER_NAME}-eip-assoc",
+    instance_id=server_0.id,
+    allocation_id=eip.id,
+) if eip else None
+
+server_0_address = eip.public_ip if eip else server_0.public_ip
+_join_opts = pulumi.ResourceOptions(depends_on=[eip_assoc]) if eip_assoc else None
+
 server_nodes = [server_0]
 
 for i in range(1, DEFAULT_NODES):
-    init = pulumi.Output.all(k3s_token.result, server_0.public_ip).apply(
+    init = pulumi.Output.all(k3s_token.result, server_0_address).apply(
         lambda args: cloud_init_server_join(args[0], args[1])
     )
     node = aws.ec2.Instance(
@@ -201,6 +227,7 @@ for i in range(1, DEFAULT_NODES):
         instance_type="t3.medium",
         user_data=init,
         tags={"Name": f"{CLUSTER_NAME}-server-{i}", "k3s-anywhere": CLUSTER_NAME},
+        opts=_join_opts,
         **_common,
     )
     server_nodes.append(node)
@@ -208,7 +235,7 @@ for i in range(1, DEFAULT_NODES):
 gpu_node_list = []
 
 for i in range(GPU_NODES):
-    init = pulumi.Output.all(k3s_token.result, server_0.public_ip).apply(
+    init = pulumi.Output.all(k3s_token.result, server_0_address).apply(
         lambda args: cloud_init_agent(args[0], args[1], gpu=True)
     )
     node = aws.ec2.Instance(
@@ -216,6 +243,7 @@ for i in range(GPU_NODES):
         instance_type="g4dn.2xlarge",
         user_data=init,
         tags={"Name": f"{CLUSTER_NAME}-gpu-{i}", "k3s-anywhere": CLUSTER_NAME},
+        opts=_join_opts,
         **_common,
     )
     gpu_node_list.append(node)
@@ -278,6 +306,7 @@ pulumi.export("provider",           "aws")
 pulumi.export("region",             REGION)
 pulumi.export("server_public_ips",  server_ips)
 pulumi.export("server_public_dns",  server_dns)
+pulumi.export("elastic_ip",         eip.public_ip if eip else "")
 pulumi.export("gpu_public_ips",    gpu_ips)
 pulumi.export("default_node_count", DEFAULT_NODES)
 pulumi.export("gpu_node_count",    GPU_NODES)
