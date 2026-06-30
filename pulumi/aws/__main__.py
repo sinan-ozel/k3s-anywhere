@@ -250,11 +250,16 @@ for i in range(GPU_NODES):
     gpu_node_list.append(node)
 
 # ── Backup bucket ─────────────────────────────────────────────────────────────
+# protect=True: once backups exist, S3 refuses to delete a non-empty bucket
+# anyway — without protect, that surfaces as a confusing `pulumi destroy`
+# failure. With it, destroy cleanly skips this one resource and the bucket
+# (and its backups) survive teardown, ready for the next provision.
 
 backup_bucket = aws.s3.BucketV2(
     f"{CLUSTER_NAME}-backups",
     bucket=f"{BUCKET_PREFIX}{CLUSTER_NAME}-backups",
     tags={"k3s-anywhere": CLUSTER_NAME},
+    opts=pulumi.ResourceOptions(protect=True),
 )
 
 aws.s3.BucketPublicAccessBlock(

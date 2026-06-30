@@ -195,11 +195,14 @@ for i in range(GPU_NODES):
     gpu_node_list.append(node)
 
 # ── Backup bucket ─────────────────────────────────────────────────────────────
+# protect=True: the bucket (and any backups in it) survives `pulumi destroy`
+# (teardown), ready for the next provision. See pulumi/aws for the rationale.
 
 backup_bucket = exoscale.StorageBucket(
     f"{CLUSTER_NAME}-backups",
     bucket=f"{CLUSTER_NAME}-backups",
     acl="private",
+    opts=pulumi.ResourceOptions(protect=True),
 )
 
 backup_role = exoscale.IamRole(
