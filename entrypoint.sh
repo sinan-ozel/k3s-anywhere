@@ -61,7 +61,7 @@ case "$PROVIDER" in
 esac
 
 [ -n "${DEFAULT_NODE_COUNT:-}" ] || error "DEFAULT_NODE_COUNT is not set."
-[ -n "${PORT:-}"               ] || error "PORT is not set."
+[ -n "${PORT:-}" ] || [ -n "${PORTS:-}" ] || error "PORT or PORTS is not set."
 
 # ── Normalise region ──────────────────────────────────────────────────────────
 

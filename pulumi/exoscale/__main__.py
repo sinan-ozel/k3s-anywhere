@@ -4,11 +4,12 @@ import pulumi
 import pulumiverse_exoscale as exoscale
 import pulumi_tls as tls
 import pulumi_random as random
+from helpers import get_ports
 
 CLUSTER_NAME   = os.environ["CLUSTER_NAME"]
 DEFAULT_NODES  = int(os.environ.get("DEFAULT_NODE_COUNT", "1"))
 GPU_NODES      = int(os.environ.get("GPU_NODE_COUNT", "0"))
-PORT           = int(os.environ["PORT"])
+PORTS          = get_ports()
 ZONE           = os.environ["EXOSCALE_ZONE"]
 K3S_VERSION    = os.environ.get("K3S_VERSION", "v1.31.4+k3s1")
 DISK_SIZE_GB   = int(os.environ.get("DISK_SIZE_GB", "25"))
@@ -43,7 +44,7 @@ sg = exoscale.SecurityGroup(
 _sg_rules = [
     ("ssh",               "TCP", 22,   22),
     ("k8s-api",           "TCP", 6443, 6443),
-    ("app-port",          "TCP", PORT, PORT),
+    *[(f"app-port-{p}",   "TCP", p,    p) for p in PORTS],
     ("flannel-vxlan",     "UDP", 8472, 8472),
     ("longhorn-rep",      "TCP", 9500, 9520),
     ("kubelet",           "TCP", 10250, 10250),
@@ -232,7 +233,7 @@ pulumi.export("elastic_ip",        eip.ip_address if eip else "")
 pulumi.export("gpu_public_ips",    gpu_ips)
 pulumi.export("default_node_count", DEFAULT_NODES)
 pulumi.export("gpu_node_count",    GPU_NODES)
-pulumi.export("port",              PORT)
+pulumi.export("ports",             PORTS)
 pulumi.export("ssh_private_key",   pulumi.Output.secret(ssh_key.private_key_pem))
 pulumi.export("backup_bucket",     backup_bucket.bucket)
 pulumi.export("backup_endpoint",   f"https://sos-{ZONE}.exo.io")

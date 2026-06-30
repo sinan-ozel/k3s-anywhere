@@ -106,6 +106,8 @@ PROVISIONED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 KUBECONFIG_CONTENT=$(cat "$KUBECONFIG_FILE")
 SERVER_IPS=$(jq '.server_public_ips' "$INFRA")
 GPU_IPS=$(jq '.gpu_public_ips' "$INFRA")
+PORTS=$(jq -c '.ports' "$INFRA")
+PORT=$(jq -r '.ports[0]' "$INFRA")
 
 jq -n \
     --arg  schema_version    "1" \
@@ -119,6 +121,7 @@ jq -n \
     --argjson default_nodes  "${DEFAULT_NODE_COUNT}" \
     --argjson gpu_nodes      "${GPU_NODE_COUNT}" \
     --argjson port           "${PORT}" \
+    --argjson ports          "${PORTS}" \
     --arg  k3s_version       "${K3S_VERSION:-v1.31.4+k3s1}" \
     --arg  longhorn_version  "${LONGHORN_VERSION}" \
     --arg  provisioned_at    "${PROVISIONED_AT}" \
@@ -140,6 +143,7 @@ jq -n \
         default_node_count: $default_nodes,
         gpu_node_count:    $gpu_nodes,
         port:              $port,
+        ports:             $ports,
         k3s_version:       $k3s_version,
         longhorn_version:  $longhorn_version,
         provisioned_at:    $provisioned_at,

@@ -5,14 +5,12 @@ import pulumi
 import pulumi_aws as aws
 import pulumi_tls as tls
 import pulumi_random as random
+from helpers import get_ports
 
 CLUSTER_NAME   = os.environ["CLUSTER_NAME"]
 DEFAULT_NODES  = int(os.environ.get("DEFAULT_NODE_COUNT", "1"))
 GPU_NODES      = int(os.environ.get("GPU_NODE_COUNT", "0"))
-PORT           = int(os.environ["PORT"])
-# Comma-separated extra TCP ports to open in the security group, e.g. for a
-# port the configurable PORT doesn't cover (ACME HTTP-01 on 80, TLS on 443).
-EXTRA_PORTS    = [int(p) for p in os.environ.get("PORTS", "").split(",") if p.strip()]
+PORTS          = get_ports()
 REGION         = os.environ["AWS_REGION"]
 K3S_VERSION    = os.environ.get("K3S_VERSION", "v1.31.4+k3s1")
 DISK_SIZE_GB   = int(os.environ.get("DISK_SIZE_GB", "25"))
@@ -91,10 +89,7 @@ sg = aws.ec2.SecurityGroup(
     ingress=[
         aws.ec2.SecurityGroupIngressArgs(from_port=22,    to_port=22,    protocol="tcp", cidr_blocks=["0.0.0.0/0"]),
         aws.ec2.SecurityGroupIngressArgs(from_port=6443,  to_port=6443,  protocol="tcp", cidr_blocks=["0.0.0.0/0"]),
-        *[
-            aws.ec2.SecurityGroupIngressArgs(from_port=p, to_port=p, protocol="tcp", cidr_blocks=["0.0.0.0/0"])
-            for p in _web_ports
-        ],
+        *[aws.ec2.SecurityGroupIngressArgs(from_port=p, to_port=p, protocol="tcp", cidr_blocks=["0.0.0.0/0"]) for p in PORTS],
         aws.ec2.SecurityGroupIngressArgs(from_port=8472,  to_port=8472,  protocol="udp", cidr_blocks=["0.0.0.0/0"]),
         aws.ec2.SecurityGroupIngressArgs(from_port=9500,  to_port=9520,  protocol="tcp", cidr_blocks=["0.0.0.0/0"]),
         aws.ec2.SecurityGroupIngressArgs(from_port=10250, to_port=10250, protocol="tcp", cidr_blocks=["0.0.0.0/0"]),
@@ -318,7 +313,7 @@ pulumi.export("elastic_ip",         eip.public_ip if eip else "")
 pulumi.export("gpu_public_ips",    gpu_ips)
 pulumi.export("default_node_count", DEFAULT_NODES)
 pulumi.export("gpu_node_count",    GPU_NODES)
-pulumi.export("port",              PORT)
+pulumi.export("ports",             PORTS)
 pulumi.export("ssh_private_key",   pulumi.Output.secret(ssh_key.private_key_pem))
 pulumi.export("backup_bucket",     backup_bucket.bucket)
 pulumi.export("backup_endpoint",   "")

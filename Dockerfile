@@ -17,6 +17,9 @@ RUN curl -fsSL "https://dl.k8s.io/release/$(curl -Ls https://dl.k8s.io/release/s
 # Pulumi
 RUN curl -fsSL https://get.pulumi.com | sh
 ENV PATH="/root/.pulumi/bin:${PATH}"
+# Lets pulumi/<provider>/__main__.py do `from helpers import ...` despite
+# running with /app/pulumi/<provider> as its CWD.
+ENV PYTHONPATH="/app"
 
 # Exoscale CLI (release assets are version-stamped; no unversioned URL exists)
 ARG EXO_CLI_VERSION=1.95.1
