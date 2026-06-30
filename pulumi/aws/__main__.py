@@ -78,8 +78,6 @@ aws.ec2.RouteTableAssociation(
 )
 
 # ── Security group ────────────────────────────────────────────────────────────
-# PORT plus any PORTS extras, deduplicated, each opened to 0.0.0.0/0.
-_web_ports = sorted({PORT, *EXTRA_PORTS})
 
 sg = aws.ec2.SecurityGroup(
     f"{CLUSTER_NAME}-sg",
