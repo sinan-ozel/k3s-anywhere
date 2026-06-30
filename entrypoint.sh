@@ -152,7 +152,10 @@ case "$ACTION" in
     if [ -f "/app/output/${CLUSTER_NAME}-kubeconfig.yaml" ]; then
       python "/app/scripts/${PROVIDER}/cluster/teardown_load_balancer.py"
     fi
-    pulumi destroy --yes --non-interactive
+    # --exclude-protected: without it, destroy fails its preview entirely
+    # the moment ANY resource is protect=True (e.g. the backup bucket) —
+    # it doesn't just skip that resource, it blocks the whole operation.
+    pulumi destroy --yes --non-interactive --exclude-protected
     rm -f "/app/output/${CLUSTER_NAME}-infra.json" \
           "/app/output/${CLUSTER_NAME}-kubeconfig.yaml" \
           "/app/output/${CLUSTER_NAME}-ssh.pem"
