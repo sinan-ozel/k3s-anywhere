@@ -453,7 +453,8 @@ configs/
 | `CLUSTER_NAME` | yes | Unique name; becomes the Pulumi stack name |
 | `DEFAULT_NODE_COUNT` | yes | Number of standard CPU nodes |
 | `GPU_NODE_COUNT` | no (default 0) | Number of GPU nodes |
-| `PORT` | yes | Single public port routed through Traefik |
+| `PORT` | yes | Public port routed through Traefik for app traffic |
+| `PORTS` | no | AWS only. Comma-separated extra TCP ports to open in the security group alongside `PORT`, e.g. `80,443` for ACME HTTP-01 challenges plus direct HTTPS. Deduplicated against `PORT` automatically. |
 | `STATE_BUCKET_NAME` | yes | Pulumi state bucket (created by setup script) |
 | `USE_PUBLIC_DNS` | no (default `false`) | AWS, Azure: use the cloud-assigned public DNS name in the kubeconfig and `api_endpoint` instead of the IP. The TLS certificate always covers both, so either works. Ignored on Exoscale and GCP. |
 | `K3S_VERSION` | no (default `v1.31.4+k3s1`) | k3s release to install on all nodes. |
