@@ -91,7 +91,8 @@ echo "Configuring Longhorn backup target..."
 kubectl create secret generic longhorn-backup-secret \
     -n longhorn-system \
     --from-literal=AWS_ACCESS_KEY_ID="${BACKUP_ACCESS_KEY}" \
-    --from-literal=AWS_SECRET_ACCESS_KEY="${BACKUP_SECRET_KEY}"
+    --from-literal=AWS_SECRET_ACCESS_KEY="${BACKUP_SECRET_KEY}" \
+    --dry-run=client -o yaml | kubectl apply -f -
 
 kubectl -n longhorn-system patch settings.longhorn.io backup-target \
     --type=merge -p "{\"value\":\"s3://${BACKUP_BUCKET}@${REGION}/\"}"
