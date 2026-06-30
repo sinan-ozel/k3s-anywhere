@@ -12,7 +12,7 @@ PORT           = int(os.environ["PORT"])
 ZONE           = os.environ["EXOSCALE_ZONE"]
 K3S_VERSION    = os.environ.get("K3S_VERSION", "v1.31.4+k3s1")
 DISK_SIZE_GB   = int(os.environ.get("DISK_SIZE_GB", "25"))
-ELASTIC_IP     = int(os.environ.get("ELASTIC_IP", "0"))
+ELASTIC_IP     = int(os.environ.get("ELASTIC_IP_COUNT", os.environ.get("ELASTIC_IP", "0")))
 
 # ── SSH key ───────────────────────────────────────────────────────────────────
 

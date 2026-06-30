@@ -459,7 +459,7 @@ configs/
 | `K3S_VERSION` | no (default `v1.31.4+k3s1`) | k3s release to install on all nodes. |
 | `LONGHORN_VERSION` | no (default `1.7.2`) | Longhorn Helm chart version to install. |
 | `DISK_SIZE_GB` | no (default `25`) | Root disk size in GB for each node. Increase if Longhorn storage budget is exhausted. |
-| `ELASTIC_IP` | no (default `0`) | AWS, Exoscale: allocate a static public IP for the control-plane node (Elastic IP) so `api_endpoint` and the kubeconfig survive node replacement. `1` to enable, `0` to disable. Not yet supported on GCP. |
+| `ELASTIC_IP_COUNT`  | no (default `0`) | AWS, Exoscale: allocate a static public IP for the control-plane node (Elastic IP) so `api_endpoint` and the kubeconfig survive node replacement. `1` to enable, `0` to disable. Not yet supported on GCP. |
 
 **Provider overrides** (`configs/<provider>/<name>.env`):
 
