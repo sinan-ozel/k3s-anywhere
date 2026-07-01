@@ -52,7 +52,7 @@ if unzip -l /tmp/artifact.zip | grep -q "${CLUSTER_NAME}.json.enc"; then
   [ -n "${SOPS_AGE_KEY:-}" ] \
     || error "Artifact is encrypted but SOPS_AGE_KEY is not set."
   unzip -p /tmp/artifact.zip "${CLUSTER_NAME}.json.enc" > /tmp/cluster.json.enc
-  SOPS_AGE_KEY="${SOPS_AGE_KEY}" sops --decrypt \
+  SOPS_AGE_KEY="${SOPS_AGE_KEY}" sops --decrypt --output-type json \
     /tmp/cluster.json.enc > "${OUTPUT_DIR}/${CLUSTER_NAME}.json"
   rm -f /tmp/cluster.json.enc
 elif unzip -l /tmp/artifact.zip | grep -q "${CLUSTER_NAME}.json"; then
