@@ -181,6 +181,10 @@ _common = dict(
     vpc_security_group_ids=[sg.id],
     key_name=key_pair.key_name,
     root_block_device=aws.ec2.InstanceRootBlockDeviceArgs(volume_size=DISK_SIZE_GB, volume_type="gp3"),
+    metadata_options=aws.ec2.InstanceMetadataOptionsArgs(
+        http_tokens="required",
+        http_put_response_hop_limit=1,
+    ),
 )
 
 eip = aws.ec2.Eip(
