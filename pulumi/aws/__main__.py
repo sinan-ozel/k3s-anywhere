@@ -15,6 +15,7 @@ REGION         = os.environ["AWS_REGION"]
 K3S_VERSION    = os.environ.get("K3S_VERSION", "v1.31.4+k3s1")
 DISK_SIZE_GB   = int(os.environ.get("DISK_SIZE_GB", "25"))
 ELASTIC_IP     = int(os.environ.get("ELASTIC_IP_COUNT", os.environ.get("ELASTIC_IP", "0")))
+EXTERNAL_DNS   = os.environ.get("EXTERNAL_DNS", "").lower() in ("1", "true", "yes")
 HOSTED_ZONE_ID = os.environ.get("HOSTED_ZONE_ID", "")
 # S3 bucket names are global. If <CLUSTER_NAME>-backups is already taken by
 # another account, set BUCKET_PREFIX to a unique value (e.g. your org name
@@ -308,9 +309,12 @@ externaldns_user = aws.iam.User(
     f"{CLUSTER_NAME}-externaldns-user",
     name=f"{CLUSTER_NAME}-externaldns",
     tags={"k3s-anywhere": CLUSTER_NAME},
-) if HOSTED_ZONE_ID else None
+) if EXTERNAL_DNS else None
 
 if externaldns_user:
+    _zone_resource = (
+        f"arn:aws:route53:::hostedzone/{HOSTED_ZONE_ID}" if HOSTED_ZONE_ID else "*"
+    )
     aws.iam.UserPolicy(
         f"{CLUSTER_NAME}-externaldns-policy",
         user=externaldns_user.name,
@@ -320,7 +324,7 @@ if externaldns_user:
                 {
                     "Effect": "Allow",
                     "Action": "route53:ChangeResourceRecordSets",
-                    "Resource": f"arn:aws:route53:::hostedzone/{HOSTED_ZONE_ID}",
+                    "Resource": _zone_resource,
                 },
                 {
                     "Effect": "Allow",
