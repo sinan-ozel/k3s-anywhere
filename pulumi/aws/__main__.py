@@ -16,6 +16,21 @@ K3S_VERSION    = os.environ.get("K3S_VERSION", "v1.31.4+k3s1")
 DISK_SIZE_GB   = int(os.environ.get("DISK_SIZE_GB", "25"))
 ELASTIC_IP     = int(os.environ.get("ELASTIC_IP_COUNT", os.environ.get("ELASTIC_IP", "0")))
 EXTERNAL_DNS   = os.environ.get("EXTERNAL_DNS", "").lower() in ("1", "true", "yes")
+
+_version  = open("/app/VERSION").read().strip() if os.path.exists("/app/VERSION") else "dev"
+_teardown = (
+    f"docker run --rm -e ACTION=teardown -e PROVIDER=aws"
+    f" -e CLUSTER_NAME={CLUSTER_NAME} -e AWS_REGION={REGION}"
+    f" sinanozel/k3s-anywhere:{_version}"
+)
+
+def _tags(name: str, cleanup: str) -> dict:
+    return {
+        "Name":       name,
+        "ManagedBy":  f"k3s-anywhere {_version}",
+        "k3s-anywhere": CLUSTER_NAME,
+        "Cleanup":    cleanup,
+    }
 # S3 bucket names are global. If <CLUSTER_NAME>-backups is already taken by
 # another account, set BUCKET_PREFIX to a unique value (e.g. your org name
 # followed by a dash). The provisioner IAM policy in setup.sh covers *-backups,
@@ -30,6 +45,7 @@ key_pair = aws.ec2.KeyPair(
     f"{CLUSTER_NAME}-keypair",
     key_name=f"{CLUSTER_NAME}-key",
     public_key=ssh_key.public_key_openssh,
+    tags=_tags(f"{CLUSTER_NAME}-key", _teardown),
 )
 
 # ── k3s cluster token ─────────────────────────────────────────────────────────
@@ -47,7 +63,7 @@ vpc = aws.ec2.Vpc(
     cidr_block="10.0.0.0/16",
     enable_dns_hostnames=True,
     enable_dns_support=True,
-    tags={"Name": f"{CLUSTER_NAME}-vpc"},
+    tags=_tags(f"{CLUSTER_NAME}-vpc", _teardown),
 )
 
 subnet = aws.ec2.Subnet(
@@ -56,20 +72,20 @@ subnet = aws.ec2.Subnet(
     cidr_block="10.0.0.0/24",
     availability_zone=f"{REGION}a",
     map_public_ip_on_launch=True,
-    tags={"Name": f"{CLUSTER_NAME}-subnet"},
+    tags=_tags(f"{CLUSTER_NAME}-subnet", _teardown),
 )
 
 igw = aws.ec2.InternetGateway(
     f"{CLUSTER_NAME}-igw",
     vpc_id=vpc.id,
-    tags={"Name": f"{CLUSTER_NAME}-igw"},
+    tags=_tags(f"{CLUSTER_NAME}-igw", _teardown),
 )
 
 route_table = aws.ec2.RouteTable(
     f"{CLUSTER_NAME}-rt",
     vpc_id=vpc.id,
     routes=[aws.ec2.RouteTableRouteArgs(cidr_block="0.0.0.0/0", gateway_id=igw.id)],
-    tags={"Name": f"{CLUSTER_NAME}-rt"},
+    tags=_tags(f"{CLUSTER_NAME}-rt", _teardown),
 )
 
 aws.ec2.RouteTableAssociation(
@@ -98,7 +114,7 @@ sg = aws.ec2.SecurityGroup(
     egress=[
         aws.ec2.SecurityGroupEgressArgs(from_port=0, to_port=0, protocol="-1", cidr_blocks=["0.0.0.0/0"]),
     ],
-    tags={"Name": f"{CLUSTER_NAME}-sg"},
+    tags=_tags(f"{CLUSTER_NAME}-sg", _teardown),
 )
 
 # ── AMI ───────────────────────────────────────────────────────────────────────
@@ -191,7 +207,7 @@ _common = dict(
 eip = aws.ec2.Eip(
     f"{CLUSTER_NAME}-eip",
     domain="vpc",
-    tags={"Name": f"{CLUSTER_NAME}-eip", "k3s-anywhere": CLUSTER_NAME},
+    tags=_tags(f"{CLUSTER_NAME}-eip", _teardown),
 ) if ELASTIC_IP else None
 
 server_0_init = (
@@ -206,7 +222,7 @@ server_0 = aws.ec2.Instance(
     f"{CLUSTER_NAME}-server-0",
     instance_type="t3.medium",
     user_data=server_0_init,
-    tags={"Name": f"{CLUSTER_NAME}-server-0", "k3s-anywhere": CLUSTER_NAME},
+    tags=_tags(f"{CLUSTER_NAME}-server-0", _teardown),
     **_common,
 )
 
@@ -232,7 +248,7 @@ for i in range(1, DEFAULT_NODES):
         f"{CLUSTER_NAME}-server-{i}",
         instance_type="t3.medium",
         user_data=init,
-        tags={"Name": f"{CLUSTER_NAME}-server-{i}", "k3s-anywhere": CLUSTER_NAME},
+        tags=_tags(f"{CLUSTER_NAME}-server-{i}", _teardown),
         opts=_join_opts,
         **_common,
     )
@@ -248,7 +264,7 @@ for i in range(GPU_NODES):
         f"{CLUSTER_NAME}-gpu-{i}",
         instance_type="g4dn.2xlarge",
         user_data=init,
-        tags={"Name": f"{CLUSTER_NAME}-gpu-{i}", "k3s-anywhere": CLUSTER_NAME},
+        tags=_tags(f"{CLUSTER_NAME}-gpu-{i}", _teardown),
         opts=_join_opts,
         **_common,
     )
@@ -263,7 +279,7 @@ for i in range(GPU_NODES):
 backup_bucket = aws.s3.BucketV2(
     f"{CLUSTER_NAME}-backups",
     bucket=f"{BUCKET_PREFIX}{CLUSTER_NAME}-backups",
-    tags={"k3s-anywhere": CLUSTER_NAME},
+    tags=_tags(f"{BUCKET_PREFIX}{CLUSTER_NAME}-backups", "<protected>"),
     opts=pulumi.ResourceOptions(protect=True),
 )
 
@@ -279,7 +295,7 @@ aws.s3.BucketPublicAccessBlock(
 backup_user = aws.iam.User(
     f"{CLUSTER_NAME}-backup-user",
     name=f"{CLUSTER_NAME}-backup",
-    tags={"k3s-anywhere": CLUSTER_NAME},
+    tags=_tags(f"{CLUSTER_NAME}-backup", _teardown),
 )
 
 backup_policy_doc = backup_bucket.arn.apply(lambda arn: json.dumps({
@@ -307,7 +323,7 @@ backup_access_key = aws.iam.AccessKey(
 externaldns_user = aws.iam.User(
     f"{CLUSTER_NAME}-externaldns-user",
     name=f"{CLUSTER_NAME}-externaldns",
-    tags={"k3s-anywhere": CLUSTER_NAME},
+    tags=_tags(f"{CLUSTER_NAME}-externaldns", _teardown),
 ) if EXTERNAL_DNS else None
 
 if externaldns_user:

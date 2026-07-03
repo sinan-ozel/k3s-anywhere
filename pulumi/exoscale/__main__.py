@@ -15,6 +15,21 @@ K3S_VERSION    = os.environ.get("K3S_VERSION", "v1.31.4+k3s1")
 DISK_SIZE_GB   = int(os.environ.get("DISK_SIZE_GB", "25"))
 ELASTIC_IP     = int(os.environ.get("ELASTIC_IP_COUNT", os.environ.get("ELASTIC_IP", "0")))
 
+_version  = open("/app/VERSION").read().strip() if os.path.exists("/app/VERSION") else "dev"
+_teardown = (
+    f"docker run --rm -e ACTION=teardown -e PROVIDER=exoscale"
+    f" -e CLUSTER_NAME={CLUSTER_NAME} -e EXOSCALE_ZONE={ZONE}"
+    f" sinanozel/k3s-anywhere:{_version}"
+)
+
+def _labels(name: str, cleanup: str) -> dict:
+    return {
+        "name":         name,
+        "managed-by":   f"k3s-anywhere {_version}",
+        "k3s-anywhere": CLUSTER_NAME,
+        "cleanup":      cleanup,
+    }
+
 # ── SSH key ───────────────────────────────────────────────────────────────────
 
 ssh_key = tls.PrivateKey(f"{CLUSTER_NAME}-ssh-key", algorithm="RSA", rsa_bits=4096)
@@ -39,6 +54,7 @@ sg = exoscale.SecurityGroup(
     f"{CLUSTER_NAME}-sg",
     name=f"{CLUSTER_NAME}-sg",
     description=f"k3s-anywhere {CLUSTER_NAME}",
+    labels=_labels(f"{CLUSTER_NAME}-sg", _teardown),
 )
 
 _sg_rules = [
@@ -137,7 +153,11 @@ _common = dict(
     template_id=ubuntu.id,
 )
 
-eip = exoscale.ElasticIp(f"{CLUSTER_NAME}-eip", zone=ZONE) if ELASTIC_IP else None
+eip = exoscale.ElasticIp(
+    f"{CLUSTER_NAME}-eip",
+    zone=ZONE,
+    labels=_labels(f"{CLUSTER_NAME}-eip", _teardown),
+) if ELASTIC_IP else None
 
 server_0_init = (
     pulumi.Output.all(k3s_token.result, eip.ip_address).apply(
@@ -153,6 +173,7 @@ server_0 = exoscale.ComputeInstance(
     type="standard.medium",
     user_data=server_0_init,
     elastic_ip_ids=[eip.id] if eip else None,
+    labels=_labels(f"{CLUSTER_NAME}-server-0", _teardown),
     **_common,
 )
 
@@ -173,6 +194,7 @@ for i in range(1, DEFAULT_NODES):
         name=f"{CLUSTER_NAME}-server-{i}",
         type="standard.medium",
         user_data=init,
+        labels=_labels(f"{CLUSTER_NAME}-server-{i}", _teardown),
         opts=_join_opts,
         **_common,
     )
@@ -189,6 +211,7 @@ for i in range(GPU_NODES):
         name=f"{CLUSTER_NAME}-gpu-{i}",
         type="gpua30.small",
         user_data=init,
+        labels=_labels(f"{CLUSTER_NAME}-gpu-{i}", _teardown),
         opts=_join_opts,
         **_common,
     )

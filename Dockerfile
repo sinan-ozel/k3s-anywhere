@@ -59,5 +59,8 @@ RUN chmod +x /app/entrypoint.sh \
     && find /app/scripts -name "*.sh" -exec chmod +x {} \; \
     && mkdir -p /app/output
 
+ARG K3S_ANYWHERE_VERSION=dev
+RUN echo "${K3S_ANYWHERE_VERSION}" > /app/VERSION
+
 WORKDIR /app
 ENTRYPOINT ["/app/entrypoint.sh"]

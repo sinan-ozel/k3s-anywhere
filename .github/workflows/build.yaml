@@ -75,6 +75,8 @@ jobs:
           load: true  # export to local Docker daemon for save; no registry credentials needed here
           push: false
           tags: ${{ steps.version.outputs.tags }}
+          build-args: |
+            K3S_ANYWHERE_VERSION=${{ steps.version.outputs.version }}
           labels: |
             org.opencontainers.image.version=${{ steps.version.outputs.version }}
             org.opencontainers.image.revision=${{ github.sha }}

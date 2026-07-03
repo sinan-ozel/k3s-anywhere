@@ -22,6 +22,9 @@ ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text) \
 BUCKET="${STATE_BUCKET_NAME:-k3s-anywhere-state-${ACCOUNT_ID}}"
 USER_NAME="k3s-anywhere-provisioner"
 POLICY_NAME="k3s-anywhere-provisioner-policy"
+IMAGE_VERSION=$(cat /app/VERSION 2>/dev/null || echo "dev")
+_MANAGED_BY="k3s-anywhere ${IMAGE_VERSION}"
+_DECOMMISSION="docker run --rm -e ACTION=decommission -e PROVIDER=aws -e AWS_REGION=${REGION} -e STATE_BUCKET_NAME=${BUCKET} sinanozel/k3s-anywhere:${IMAGE_VERSION}"
 
 # AWS-managed policies to attach to the provisioner user.
 # k3s-on-EC2 requires none. Add ARNs here if future features need them.
@@ -48,6 +51,10 @@ else
         "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
     echo "      Created: ${BUCKET}"
 fi
+aws s3api put-bucket-tagging --bucket "${BUCKET}" \
+    --tagging "$(jq -cn \
+        --arg n "${BUCKET}" --arg m "${_MANAGED_BY}" --arg c "${_DECOMMISSION}" \
+        '{"TagSet":[{"Key":"Name","Value":$n},{"Key":"ManagedBy","Value":$m},{"Key":"Cleanup","Value":$c}]}')"
 
 # ── IAM user ──────────────────────────────────────────────────────────────────
 
@@ -55,6 +62,10 @@ echo "[2/4] Creating IAM user..."
 aws iam create-user --user-name "${USER_NAME}" 2>/dev/null \
     && echo "      Created: ${USER_NAME}" \
     || echo "      Already exists: ${USER_NAME}"
+aws iam tag-user --user-name "${USER_NAME}" \
+    --tags "$(jq -cn \
+        --arg n "${USER_NAME}" --arg m "${_MANAGED_BY}" --arg c "${_DECOMMISSION}" \
+        '[{"Key":"Name","Value":$n},{"Key":"ManagedBy","Value":$m},{"Key":"Cleanup","Value":$c}]')"
 
 # ── IAM policy ────────────────────────────────────────────────────────────────
 
