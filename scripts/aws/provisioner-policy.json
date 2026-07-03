@@ -26,7 +26,7 @@
       "Resource": "*"
     },
     {
-      "Sid": "IAMBackupUser",
+      "Sid": "IAMClusterUsers",
       "Effect": "Allow",
       "Action": [
         "iam:CreateUser",
@@ -42,7 +42,10 @@
         "iam:ListAccessKeys",
         "iam:ListGroupsForUser"
       ],
-      "Resource": "arn:aws:iam::{{ACCOUNT_ID}}:user/*-backup"
+      "Resource": [
+        "arn:aws:iam::{{ACCOUNT_ID}}:user/*-backup",
+        "arn:aws:iam::{{ACCOUNT_ID}}:user/*-externaldns"
+      ]
     }
   ]
 }
