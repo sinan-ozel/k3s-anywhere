@@ -42,7 +42,7 @@ echo ""
 
 # ── Active-stack check ────────────────────────────────────────────────────────
 
-if aws s3api head-bucket --bucket "${BUCKET}" 2>/dev/null; then
+if aws s3api head-bucket --bucket "${BUCKET}" >/dev/null 2>&1; then
     OBJECT_COUNT=$(aws s3api list-objects-v2 --bucket "${BUCKET}" \
         --query 'KeyCount' --output text 2>/dev/null || echo "0")
     OBJECT_COUNT="${OBJECT_COUNT/None/0}"
@@ -111,7 +111,7 @@ fi
 
 echo "[2/2] Deleting state bucket s3://${BUCKET}..."
 
-if aws s3api head-bucket --bucket "${BUCKET}" 2>/dev/null; then
+if aws s3api head-bucket --bucket "${BUCKET}" >/dev/null 2>&1; then
     aws s3 rm "s3://${BUCKET}" --recursive --quiet
     aws s3 rb "s3://${BUCKET}"
     echo "      Deleted: s3://${BUCKET}"

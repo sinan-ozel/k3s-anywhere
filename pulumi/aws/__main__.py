@@ -276,7 +276,7 @@ for i in range(GPU_NODES):
 # failure. With it, destroy cleanly skips this one resource and the bucket
 # (and its backups) survive teardown, ready for the next provision.
 
-backup_bucket = aws.s3.BucketV2(
+backup_bucket = aws.s3.Bucket(
     f"{CLUSTER_NAME}-backups",
     bucket=f"{BUCKET_PREFIX}{CLUSTER_NAME}-backups",
     tags=_tags(f"{BUCKET_PREFIX}{CLUSTER_NAME}-backups", "<protected>"),
