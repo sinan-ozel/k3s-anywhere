@@ -102,7 +102,6 @@ SERVER_IPS=$(jq '.server_public_ips' "$INFRA")
 GPU_IPS=$(jq '.gpu_public_ips' "$INFRA")
 PORTS=$(jq -c '.ports' "$INFRA")
 PORT=$(jq -r '.ports[0]' "$INFRA")
-EXTERNALDNS_ZONE_ID="${HOSTED_ZONE_ID:-}"
 
 jq -n \
     --arg  schema_version    "1" \
@@ -124,8 +123,7 @@ jq -n \
     --arg  backup_endpoint            "${BACKUP_ENDPOINT}" \
     --arg  backup_access_key          "${BACKUP_ACCESS_KEY}" \
     --arg  backup_secret_key          "${BACKUP_SECRET_KEY}" \
-    --arg  elastic_ip                 "${ELASTIC_IP_ADDR}" \
-    --arg  externaldns_hosted_zone_id "${EXTERNALDNS_ZONE_ID:-}" \
+    --arg  elastic_ip "${ELASTIC_IP_ADDR}" \
     '{
         schema_version:    $schema_version,
         cluster_name:      $cluster_name,
@@ -150,9 +148,8 @@ jq -n \
             secret_key: $backup_secret_key
         },
         externaldns: {
-            hosted_zone_id: $externaldns_hosted_zone_id,
-            access_key:     "",
-            secret_key:     ""
+            access_key: "",
+            secret_key: ""
         }
     }' > "$OUTPUT_FILE"
 

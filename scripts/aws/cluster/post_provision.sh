@@ -24,7 +24,6 @@ SSH_KEY=$(jq -r '.ssh_private_key' "$INFRA")
 BACKUP_BUCKET=$(jq -r '.backup_bucket' "$INFRA")
 BACKUP_ACCESS_KEY=$(jq -r '.backup_access_key' "$INFRA")
 BACKUP_SECRET_KEY=$(jq -r '.backup_secret_key' "$INFRA")
-EXTERNALDNS_ZONE_ID=$(jq -r '.externaldns_hosted_zone_id // empty' "$INFRA")
 EXTERNALDNS_ACCESS_KEY=$(jq -r '.externaldns_access_key // empty' "$INFRA")
 EXTERNALDNS_SECRET_KEY=$(jq -r '.externaldns_secret_key // empty' "$INFRA")
 
@@ -133,10 +132,9 @@ jq -n \
     --arg  backup_endpoint            "" \
     --arg  backup_access_key          "${BACKUP_ACCESS_KEY}" \
     --arg  backup_secret_key          "${BACKUP_SECRET_KEY}" \
-    --arg  elastic_ip                 "${ELASTIC_IP_ADDR}" \
-    --arg  externaldns_hosted_zone_id "${EXTERNALDNS_ZONE_ID:-}" \
-    --arg  externaldns_access_key     "${EXTERNALDNS_ACCESS_KEY:-}" \
-    --arg  externaldns_secret_key     "${EXTERNALDNS_SECRET_KEY:-}" \
+    --arg  elastic_ip             "${ELASTIC_IP_ADDR}" \
+    --arg  externaldns_access_key "${EXTERNALDNS_ACCESS_KEY:-}" \
+    --arg  externaldns_secret_key "${EXTERNALDNS_SECRET_KEY:-}" \
     '{
         schema_version:    $schema_version,
         cluster_name:      $cluster_name,
@@ -161,9 +159,8 @@ jq -n \
             secret_key: $backup_secret_key
         },
         externaldns: {
-            hosted_zone_id: $externaldns_hosted_zone_id,
-            access_key:     $externaldns_access_key,
-            secret_key:     $externaldns_secret_key
+            access_key: $externaldns_access_key,
+            secret_key: $externaldns_secret_key
         }
     }' > "$OUTPUT_FILE"
 

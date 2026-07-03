@@ -16,7 +16,6 @@ K3S_VERSION    = os.environ.get("K3S_VERSION", "v1.31.4+k3s1")
 DISK_SIZE_GB   = int(os.environ.get("DISK_SIZE_GB", "25"))
 ELASTIC_IP     = int(os.environ.get("ELASTIC_IP_COUNT", os.environ.get("ELASTIC_IP", "0")))
 EXTERNAL_DNS   = os.environ.get("EXTERNAL_DNS", "").lower() in ("1", "true", "yes")
-HOSTED_ZONE_ID = os.environ.get("HOSTED_ZONE_ID", "")
 # S3 bucket names are global. If <CLUSTER_NAME>-backups is already taken by
 # another account, set BUCKET_PREFIX to a unique value (e.g. your org name
 # followed by a dash). The provisioner IAM policy in setup.sh covers *-backups,
@@ -312,9 +311,6 @@ externaldns_user = aws.iam.User(
 ) if EXTERNAL_DNS else None
 
 if externaldns_user:
-    _zone_resource = (
-        f"arn:aws:route53:::hostedzone/{HOSTED_ZONE_ID}" if HOSTED_ZONE_ID else "*"
-    )
     aws.iam.UserPolicy(
         f"{CLUSTER_NAME}-externaldns-policy",
         user=externaldns_user.name,
@@ -324,7 +320,7 @@ if externaldns_user:
                 {
                     "Effect": "Allow",
                     "Action": "route53:ChangeResourceRecordSets",
-                    "Resource": _zone_resource,
+                    "Resource": "*",
                 },
                 {
                     "Effect": "Allow",
@@ -365,6 +361,5 @@ pulumi.export("backup_bucket",     backup_bucket.bucket)
 pulumi.export("backup_endpoint",   "")
 pulumi.export("backup_access_key", pulumi.Output.secret(backup_access_key.id))
 pulumi.export("backup_secret_key", pulumi.Output.secret(backup_access_key.secret))
-pulumi.export("externaldns_hosted_zone_id", HOSTED_ZONE_ID)
-pulumi.export("externaldns_access_key",     pulumi.Output.secret(externaldns_access_key.id)     if externaldns_access_key else "")
-pulumi.export("externaldns_secret_key",     pulumi.Output.secret(externaldns_access_key.secret) if externaldns_access_key else "")
+pulumi.export("externaldns_access_key", pulumi.Output.secret(externaldns_access_key.id)     if externaldns_access_key else "")
+pulumi.export("externaldns_secret_key", pulumi.Output.secret(externaldns_access_key.secret) if externaldns_access_key else "")
