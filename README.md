@@ -460,6 +460,7 @@ configs/
 | `LONGHORN_VERSION` | no (default `1.7.2`) | Longhorn Helm chart version to install. |
 | `DISK_SIZE_GB` | no (default `25`) | Root disk size in GB for each node. Increase if Longhorn storage budget is exhausted. |
 | `ELASTIC_IP_COUNT`  | no (default `0`) | AWS, Exoscale: allocate a static public IP for the control-plane node (Elastic IP) so `api_endpoint` and the kubeconfig survive node replacement. `1` to enable, `0` to disable. |
+| `HOSTED_ZONE_ID` | no | AWS only: Route 53 hosted zone ID. When set, provisions a dedicated IAM user with the [external-dns](https://github.com/kubernetes-sigs/external-dns) Route 53 policy. Credentials are exported in the output JSON under `externaldns`. |
 
 **Provider overrides** (`configs/<provider>/<name>.env`):
 

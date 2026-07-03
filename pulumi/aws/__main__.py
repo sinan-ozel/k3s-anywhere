@@ -15,6 +15,7 @@ REGION         = os.environ["AWS_REGION"]
 K3S_VERSION    = os.environ.get("K3S_VERSION", "v1.31.4+k3s1")
 DISK_SIZE_GB   = int(os.environ.get("DISK_SIZE_GB", "25"))
 ELASTIC_IP     = int(os.environ.get("ELASTIC_IP_COUNT", os.environ.get("ELASTIC_IP", "0")))
+HOSTED_ZONE_ID = os.environ.get("HOSTED_ZONE_ID", "")
 # S3 bucket names are global. If <CLUSTER_NAME>-backups is already taken by
 # another account, set BUCKET_PREFIX to a unique value (e.g. your org name
 # followed by a dash). The provisioner IAM policy in setup.sh covers *-backups,
@@ -301,6 +302,40 @@ backup_access_key = aws.iam.AccessKey(
     user=backup_user.name,
 )
 
+# ── External-DNS IAM ─────────────────────────────────────────────────────────
+
+externaldns_user = aws.iam.User(
+    f"{CLUSTER_NAME}-externaldns-user",
+    name=f"{CLUSTER_NAME}-externaldns",
+    tags={"k3s-anywhere": CLUSTER_NAME},
+) if HOSTED_ZONE_ID else None
+
+if externaldns_user:
+    aws.iam.UserPolicy(
+        f"{CLUSTER_NAME}-externaldns-policy",
+        user=externaldns_user.name,
+        policy=json.dumps({
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Action": "route53:ChangeResourceRecordSets",
+                    "Resource": f"arn:aws:route53:::hostedzone/{HOSTED_ZONE_ID}",
+                },
+                {
+                    "Effect": "Allow",
+                    "Action": ["route53:ListHostedZones", "route53:ListResourceRecordSets"],
+                    "Resource": "*",
+                },
+            ],
+        }),
+    )
+
+externaldns_access_key = aws.iam.AccessKey(
+    f"{CLUSTER_NAME}-externaldns-key",
+    user=externaldns_user.name,
+) if externaldns_user else None
+
 # ── Exports ───────────────────────────────────────────────────────────────────
 
 server_ips = pulumi.Output.all(*[n.public_ip for n in server_nodes])
@@ -326,3 +361,6 @@ pulumi.export("backup_bucket",     backup_bucket.bucket)
 pulumi.export("backup_endpoint",   "")
 pulumi.export("backup_access_key", pulumi.Output.secret(backup_access_key.id))
 pulumi.export("backup_secret_key", pulumi.Output.secret(backup_access_key.secret))
+pulumi.export("externaldns_hosted_zone_id", HOSTED_ZONE_ID)
+pulumi.export("externaldns_access_key",     pulumi.Output.secret(externaldns_access_key.id)     if externaldns_access_key else "")
+pulumi.export("externaldns_secret_key",     pulumi.Output.secret(externaldns_access_key.secret) if externaldns_access_key else "")
