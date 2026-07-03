@@ -79,7 +79,7 @@ fi
 
 echo "[1/2] Deleting IAM user ${USER_NAME}..."
 
-if aws iam get-user --user-name "${USER_NAME}" 2>/dev/null; then
+if aws iam get-user --user-name "${USER_NAME}" --output text --query 'User.UserName' 2>/dev/null | grep -q .; then
     KEYS=$(aws iam list-access-keys --user-name "${USER_NAME}" \
         --query 'AccessKeyMetadata[].AccessKeyId' --output text 2>/dev/null || true)
     for KEY_ID in ${KEYS}; do
@@ -93,10 +93,13 @@ if aws iam get-user --user-name "${USER_NAME}" 2>/dev/null; then
         echo "      Detached: ${POLICY_ARN##*/}"
     done
 
-    aws iam delete-user-policy --user-name "${USER_NAME}" \
-        --policy-name "${POLICY_NAME}" 2>/dev/null \
-        && echo "      Deleted inline policy: ${POLICY_NAME}" \
-        || echo "      Inline policy not found (skipping)."
+    # Delete all inline policies (not just the expected one — names can drift).
+    INLINE_POLICIES=$(aws iam list-user-policies --user-name "${USER_NAME}" \
+        --query 'PolicyNames[]' --output text 2>/dev/null || true)
+    for POL in ${INLINE_POLICIES}; do
+        aws iam delete-user-policy --user-name "${USER_NAME}" --policy-name "${POL}"
+        echo "      Deleted inline policy: ${POL}"
+    done
 
     aws iam delete-user --user-name "${USER_NAME}"
     echo "      Deleted user: ${USER_NAME}"
