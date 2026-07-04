@@ -460,7 +460,7 @@ configs/
 | `LONGHORN_VERSION` | no (default `1.7.2`) | Longhorn Helm chart version to install. |
 | `DISK_SIZE_GB` | no (default `25`) | Root disk size in GB for each node. Increase if Longhorn storage budget is exhausted. |
 | `ELASTIC_IP_COUNT`  | no (default `0`) | AWS, Exoscale: allocate a static public IP for the control-plane node (Elastic IP) so `api_endpoint` and the kubeconfig survive node replacement. `1` to enable, `0` to disable. |
-| `EXTERNAL_DNS` | no (default `false`) | Set to `true` to enable [external-dns](https://github.com/kubernetes-sigs/external-dns) support. On AWS, provisions a dedicated IAM user with the Route 53 policy and exports credentials under `externaldns` in the output JSON. On other providers, the `externaldns` block is included with empty credentials — configure your DNS provider API key separately. |
+| `EXTERNAL_DNS` | no (default `false`) | Set to `true` to enable [external-dns](https://github.com/kubernetes-sigs/external-dns) support. On AWS, provisions a dedicated IAM user with the Route 53 policy and exports credentials under `externaldns` in the output JSON. On other providers, the `externaldns` block is included with empty credentials — configure your DNS provider API key separately. Can be combined with `ELASTIC_IP_COUNT=0`: external-dns watches the cluster for address changes and updates Route 53 accordingly, but without a static IP there will be a propagation lag after node restarts during which DNS records point to the old address. |
 
 **Provider overrides** (`configs/<provider>/<name>.env`):
 
