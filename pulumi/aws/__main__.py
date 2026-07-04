@@ -290,7 +290,18 @@ _backup_cleanup = (
 backup_bucket = aws.s3.Bucket(
     f"{CLUSTER_NAME}-backups",
     bucket=_backup_bucket_name,
-    tags=_tags(_backup_bucket_name, _backup_cleanup),
+    # S3 Control TagResource (used by Pulumi's aws.s3.Bucket in provider v7)
+    # only accepts [a-zA-Z0-9+\-=._:/] — no spaces, parens, or angle brackets.
+    tags={
+        "Name":         _backup_bucket_name,
+        "ManagedBy":    f"k3s-anywhere-{_version}",
+        "k3s-anywhere": CLUSTER_NAME,
+        "Cleanup":      (
+            f"protected:manual-delete-required."
+            f"delete-user={_backup_user_name}."
+            f"delete-bucket=s3://{_backup_bucket_name}"
+        ),
+    },
     opts=pulumi.ResourceOptions(protect=True),
 )
 
