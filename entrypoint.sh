@@ -180,6 +180,31 @@ case "$ACTION" in
     # the moment ANY resource is protect=True (e.g. the backup bucket) —
     # it doesn't just skip that resource, it blocks the whole operation.
     pulumi destroy --yes --non-interactive --exclude-protected
+
+    # After a failed or state-wiped provision some resources can exist in AWS
+    # but not in Pulumi state. pulumi destroy skips them. Delete them here so
+    # the next provision starts clean. All commands use || true — idempotent.
+    if [ "$PROVIDER" = "aws" ]; then
+      _BU="${CLUSTER_NAME}-backup"
+      # Key pair: regenerated with a fresh SSH key on each provision.
+      aws ec2 delete-key-pair --key-name "${CLUSTER_NAME}-key" \
+        >/dev/null 2>&1 || true
+      # Backup IAM user: recreated by provision; access keys and inline
+      # policies must be removed before the user can be deleted.
+      for _K in $(aws iam list-access-keys --user-name "${_BU}" \
+          --query 'AccessKeyMetadata[].AccessKeyId' \
+          --output text 2>/dev/null || true); do
+        aws iam delete-access-key --user-name "${_BU}" \
+          --access-key-id "${_K}" 2>/dev/null || true
+      done
+      for _P in $(aws iam list-user-policies --user-name "${_BU}" \
+          --query 'PolicyNames[]' --output text 2>/dev/null || true); do
+        aws iam delete-user-policy --user-name "${_BU}" \
+          --policy-name "${_P}" 2>/dev/null || true
+      done
+      aws iam delete-user --user-name "${_BU}" 2>/dev/null || true
+    fi
+
     rm -f "/app/output/${CLUSTER_NAME}-infra.json" \
           "/app/output/${CLUSTER_NAME}-kubeconfig.yaml" \
           "/app/output/${CLUSTER_NAME}-ssh.pem"
