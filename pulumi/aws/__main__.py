@@ -278,10 +278,9 @@ for i in range(GPU_NODES):
 
 _backup_bucket_name = f"{BUCKET_PREFIX}{CLUSTER_NAME}-backups"
 _backup_user_name   = f"{CLUSTER_NAME}-backup"
-# Bucket and backup IAM user survive teardown (protect=True) — delete manually:
-#   1. Revoke access keys and delete inline policy on the IAM user
-#   2. aws iam delete-user --user-name <user>
-#   3. aws s3 rb s3://<bucket> --force
+# Bucket survives teardown (protect=True). To delete it manually:
+#   aws iam delete-user --user-name {user} (revoke access keys + inline policy first)
+#   aws s3 rb s3://{bucket} --force
 _backup_cleanup = (
     f"<protected> Manual cleanup: delete IAM user {_backup_user_name}"
     f" (access keys + inline policy first),"
@@ -307,8 +306,7 @@ aws.s3.BucketPublicAccessBlock(
 backup_user = aws.iam.User(
     f"{CLUSTER_NAME}-backup-user",
     name=_backup_user_name,
-    tags=_tags(_backup_user_name, _backup_cleanup),
-    opts=pulumi.ResourceOptions(protect=True),
+    tags=_tags(_backup_user_name, _teardown),
 )
 
 backup_policy_doc = backup_bucket.arn.apply(lambda arn: json.dumps({
@@ -329,7 +327,6 @@ aws.iam.UserPolicy(
 backup_access_key = aws.iam.AccessKey(
     f"{CLUSTER_NAME}-backup-key",
     user=backup_user.name,
-    opts=pulumi.ResourceOptions(protect=True),
 )
 
 # ── External-DNS IAM ─────────────────────────────────────────────────────────

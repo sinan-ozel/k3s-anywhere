@@ -144,6 +144,30 @@ pulumi stack select "${CLUSTER_NAME}" --non-interactive
 
 case "$ACTION" in
   provision)
+    if [ "$PROVIDER" = "aws" ]; then
+      # The backup bucket has protect=True so teardown skips it. After a
+      # decommission (state wipe) the bucket still exists in S3 but Pulumi has
+      # no memory of it. Import it so pulumi up treats it as already managed
+      # instead of trying to create it (which would 409).
+      _BACKUP_BUCKET="${BUCKET_PREFIX:-}${CLUSTER_NAME}-backups"
+      if aws s3api head-bucket --bucket "${_BACKUP_BUCKET}" >/dev/null 2>&1; then
+        pulumi import --yes --non-interactive "aws:s3/bucket:Bucket" \
+          "${CLUSTER_NAME}-backups" "${_BACKUP_BUCKET}" >/dev/null 2>&1 || true
+      fi
+
+      # Delete orphaned key pair left by an interrupted provision; Pulumi will
+      # recreate it with a fresh key. Skip if the key pair is already tracked
+      # in state (normal re-provision path).
+      _KEY_NAME="${CLUSTER_NAME}-key"
+      if aws ec2 describe-key-pairs --key-names "${_KEY_NAME}" \
+          >/dev/null 2>&1; then
+        _STACK_JSON=$(pulumi stack export 2>/dev/null || echo "{}")
+        if ! echo "${_STACK_JSON}" | grep -q 'aws:ec2/keyPair:KeyPair'; then
+          echo "Removing orphaned key pair ${_KEY_NAME} (will be recreated)..."
+          aws ec2 delete-key-pair --key-name "${_KEY_NAME}"
+        fi
+      fi
+    fi
     pulumi up --yes --non-interactive
     pulumi stack output --show-secrets --json > "/app/output/${CLUSTER_NAME}-infra.json"
     "/app/scripts/${PROVIDER}/cluster/post_provision.sh"
