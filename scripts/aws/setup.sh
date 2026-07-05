@@ -19,6 +19,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REGION="${AWS_REGION:-us-east-1}"
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text) \
     || { echo "ERROR: admin credentials not found. Mount ~/.aws or set AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY." >&2; exit 1; }
+
+CALLER_ARN=$(aws sts get-caller-identity --query Arn --output text)
+if echo "${CALLER_ARN}" | grep -q ":user/k3s-anywhere-provisioner"; then
+    echo "ERROR: Running as the provisioner user (${CALLER_ARN})." >&2
+    echo "       setup requires admin credentials. Drop --env-file .env (or any file" >&2
+    echo "       that sets AWS_ACCESS_KEY_ID) from the docker run command." >&2
+    exit 1
+fi
 BUCKET="${STATE_BUCKET_NAME:-k3s-anywhere-state-${ACCOUNT_ID}}"
 USER_NAME="k3s-anywhere-provisioner"
 POLICY_NAME="k3s-anywhere-provisioner-policy"
