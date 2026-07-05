@@ -33,7 +33,7 @@ on:
       image:
         required: false
         type: string
-        default: "sinanozel/k3s-anywhere:0.1.5"
+        default: "sinanozel/k3s-anywhere:0.1.6"
         description: >
           Provisioner image to run. Pin this to match the workflow ref you are
           calling — e.g. @v0.1.0 should use sinanozel/k3s-anywhere:0.1.0.

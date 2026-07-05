@@ -27,7 +27,7 @@ That's it — the provider CLIs ship inside the container.
 **1. Generate an age keypair** (once — encrypts cluster credentials at rest in GitHub Actions):
 
 ```bash
-docker run --rm --entrypoint age-keygen sinanozel/k3s-anywhere:0.1.5
+docker run --rm --entrypoint age-keygen sinanozel/k3s-anywhere:0.1.6
 ```
 
 Save both output lines. The `age1...` public key goes into your workflow. The `AGE-SECRET-KEY-1...` private key goes into GitHub Secrets as `SOPS_AGE_KEY`.
@@ -37,12 +37,12 @@ Save both output lines. The `age1...` public key goes into your workflow. The `A
 ```bash
 # AWS
 docker run --rm -e ACTION=setup -e PROVIDER=aws -e AWS_REGION=us-east-1 \
-  -v ~/.aws:/root/.aws:ro sinanozel/k3s-anywhere:0.1.5
+  -v ~/.aws:/root/.aws:ro sinanozel/k3s-anywhere:0.1.6
 
 # Exoscale
 docker run --rm -e ACTION=setup -e PROVIDER=exoscale -e EXOSCALE_ZONE=ch-gva-2 \
   -e EXOSCALE_API_KEY=<org-admin key> -e EXOSCALE_API_SECRET=<org-admin secret> \
-  sinanozel/k3s-anywhere:0.1.5
+  sinanozel/k3s-anywhere:0.1.6
 ```
 
 The container prints the provisioner credentials and state bucket name — add them to GitHub Secrets.
@@ -93,7 +93,7 @@ jobs:
 ```bash
 cp scripts/fetch/.env.example scripts/fetch/.env  # fill in your values
 docker run --rm -e ACTION=fetch --env-file scripts/fetch/.env \
-  -v $(pwd)/output:/output sinanozel/k3s-anywhere:0.1.5
+  -v $(pwd)/output:/output sinanozel/k3s-anywhere:0.1.6
 jq -r '.kubeconfig' output/my-cluster.json > ~/.kube/my-cluster.yaml
 ```
 
@@ -110,13 +110,13 @@ Run once per cloud account, locally, with admin credentials. This creates the Pu
 docker run --rm \
   -e ACTION=setup -e PROVIDER=exoscale -e EXOSCALE_ZONE=ch-gva-2 \
   -e EXOSCALE_API_KEY=<org-admin key> -e EXOSCALE_API_SECRET=<org-admin secret> \
-  sinanozel/k3s-anywhere:0.1.5
+  sinanozel/k3s-anywhere:0.1.6
 
 # AWS (admin profile from ~/.aws, or pass AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY instead)
 docker run --rm \
   -e ACTION=setup -e PROVIDER=aws -e AWS_REGION=us-east-1 \
   -v ~/.aws:/root/.aws:ro \
-  sinanozel/k3s-anywhere:0.1.5
+  sinanozel/k3s-anywhere:0.1.6
 ```
 
 The container prints the values to add to GitHub Secrets and your local `.env.secrets`.
@@ -140,14 +140,14 @@ To decommission k3s-anywhere from a cloud account entirely — for example, afte
 docker run --rm -it \
   -e ACTION=decommission -e PROVIDER=aws -e AWS_REGION=us-east-1 \
   -v ~/.aws:/root/.aws:ro \
-  sinanozel/k3s-anywhere:0.1.5
+  sinanozel/k3s-anywhere:0.1.6
 
 # Non-interactive (skip prompt — use in scripts)
 docker run --rm \
   -e ACTION=decommission -e PROVIDER=aws -e AWS_REGION=us-east-1 \
   -e FORCE=true \
   -v ~/.aws:/root/.aws:ro \
-  sinanozel/k3s-anywhere:0.1.5
+  sinanozel/k3s-anywhere:0.1.6
 ```
 
 The confirmation prompt requires you to type the IAM username (`k3s-anywhere-provisioner`) before anything is deleted. The `-it` flag is required for the prompt; omit it only with `FORCE=true`.
@@ -191,7 +191,7 @@ docker run --rm \
   -e ACTION=provision \
   -e PROVIDER=exoscale \
   -v $(pwd)/output:/app/output \
-  sinanozel/k3s-anywhere:0.1.5
+  sinanozel/k3s-anywhere:0.1.6
 ```
 
 Get the kubeconfig:
@@ -212,7 +212,7 @@ docker run --rm \
   -e ACTION=teardown \
   -e PROVIDER=exoscale \
   -v $(pwd)/output:/app/output \
-  sinanozel/k3s-anywhere:0.1.5
+  sinanozel/k3s-anywhere:0.1.6
 ```
 
 VS Code: use the **k3s: Provision** and **k3s: Teardown** tasks (edit `tasks.json` to point at your config file).
@@ -310,7 +310,7 @@ GitHub artifact visibility follows the repository: public repos expose artifacts
 Run once, locally. age ships inside the container — no local install needed:
 
 ```bash
-docker run --rm --entrypoint age-keygen sinanozel/k3s-anywhere:0.1.5
+docker run --rm --entrypoint age-keygen sinanozel/k3s-anywhere:0.1.6
 ```
 
 Output:
@@ -374,7 +374,7 @@ docker run --rm \
   -e ACTION=fetch \
   --env-file scripts/fetch/.env \
   -v $(pwd)/output:/output \
-  sinanozel/k3s-anywhere:0.1.5
+  sinanozel/k3s-anywhere:0.1.6
 ```
 
 The decrypted JSON lands at `output/<cluster-name>.json`. Extract the kubeconfig:
