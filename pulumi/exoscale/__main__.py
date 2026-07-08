@@ -96,6 +96,7 @@ def _base_packages() -> str:
           - cryptsetup
           - util-linux
           - curl
+          - gnupg
         """)
 
 def cloud_init_server_0(token: str, extra_san: str = "") -> str:
@@ -131,7 +132,22 @@ runcmd:
 
 def cloud_init_agent(token: str, server_ip: str, gpu: bool = False) -> str:
     gpu_pkg = "\n  - nvidia-driver-545\n  - nvidia-cuda-toolkit" if gpu else ""
-    gpu_cmd = "\n  - nvidia-smi" if gpu else ""
+    # nvidia-container-toolkit isn't in Ubuntu's default apt sources, so it
+    # can't go in `packages:` — its repo has to be added in runcmd, and the
+    # containerd config.toml.tmpl written before the first `k3s agent`
+    # start, so containerd picks up the nvidia runtime on boot with no
+    # restart needed. --node-label makes the node self-identifying in
+    # Kubernetes without any post-provision matching.
+    gpu_cmd = (
+        "\n  - nvidia-smi"
+        "\n  - mkdir -p /var/lib/rancher/k3s/agent/etc/containerd"
+        "\n  - curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg"
+        "\n  - bash -c \"curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' > /etc/apt/sources.list.d/nvidia-container-toolkit.list\""
+        "\n  - apt-get update"
+        "\n  - apt-get install -y nvidia-container-toolkit"
+        "\n  - nvidia-ctk runtime configure --runtime=containerd --config=/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl"
+    ) if gpu else ""
+    node_label = " --node-label k3s-anywhere.io/gpu-node=true" if gpu else ""
     return f"""#cloud-config
 {_base_packages().rstrip()}{gpu_pkg}
 runcmd:
@@ -140,7 +156,7 @@ runcmd:
     INSTALL_K3S_VERSION="{K3S_VERSION}" \\
     K3S_TOKEN="{token}" \\
     K3S_URL="https://{server_ip}:6443" \\
-    sh -s - agent
+    sh -s - agent{node_label}
 """
 
 # ── Compute instances ─────────────────────────────────────────────────────────
