@@ -5,11 +5,11 @@ error() { echo "ERROR: $1" >&2; exit 1; }
 
 # ── Validation ────────────────────────────────────────────────────────────────
 
-[ -n "${ACTION:-}" ] || error "ACTION is not set. Valid: setup | decommission | fetch | provision | teardown | refresh | reset"
+[ -n "${ACTION:-}" ] || error "ACTION is not set. Valid: setup | decommission | fetch | provision | teardown | refresh | check | reset"
 
 case "$ACTION" in
-  setup|decommission|fetch|provision|teardown|refresh|reset) ;;
-  *) error "Unknown ACTION '${ACTION}'. Valid: setup | decommission | fetch | provision | teardown | refresh | reset" ;;
+  setup|decommission|fetch|provision|teardown|refresh|check|reset) ;;
+  *) error "Unknown ACTION '${ACTION}'. Valid: setup | decommission | fetch | provision | teardown | refresh | check | reset" ;;
 esac
 
 # ── Provider-agnostic actions ─────────────────────────────────────────────────
@@ -211,6 +211,13 @@ case "$ACTION" in
     ;;
   refresh)
     pulumi refresh --yes --non-interactive
+    ;;
+  check)
+    echo "== Cluster status (stack outputs) =="
+    pulumi stack output --json 2>/dev/null || echo "{}"
+    echo
+    echo "== Checking live infrastructure against configuration (pulumi preview) =="
+    pulumi preview --non-interactive --diff
     ;;
   reset)
     pulumi stack rm "${CLUSTER_NAME}" --yes --force --non-interactive || true

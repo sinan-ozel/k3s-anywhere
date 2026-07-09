@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.1.9] - 2026-07-09
+
+- New `ACTION=check`: prints current stack outputs and runs `pulumi preview` to report drift between live infrastructure and the config files, without changing anything
+
 ## [0.1.6] - 2026-07-04
 
 - Version corrected to match the `0.1.6-dev.*` pre-release series; identical code to 0.1.5
