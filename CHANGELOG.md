@@ -3,6 +3,9 @@
 ## [0.1.9] - 2026-07-09
 
 - New `ACTION=check`: prints current stack outputs and runs `pulumi preview` to report drift between live infrastructure and the config files, without changing anything
+- **AWS, Exoscale** Fix k3s agent install command on agent/GPU nodes: the `runcmd` entry used a plain multi-line YAML scalar instead of a literal block (`- |`), so YAML folded the line continuations into one broken command and k3s never installed on any agent node
+- **AWS, Exoscale** Fix GPU driver install: replace pinned `nvidia-driver-545` (a jammy/22.04 branch, unavailable on the noble/24.04 image this project provisions) with `ubuntu-drivers-common` + `ubuntu-drivers autoinstall`, which always matches the running release
+- Upload the provisioning SSH private key (`<cluster>-ssh.pem`, sops-encrypted when `sops_age_recipient` is set) as a GitHub Actions artifact alongside the cluster output JSON — previously it was written only to the ephemeral runner and lost once the job ended
 
 ## [0.1.6] - 2026-07-04
 

@@ -178,7 +178,11 @@ runcmd:
 """
 
 def cloud_init_agent(token: str, server_ip: str, gpu: bool = False) -> str:
-    gpu_pkg = "\n  - nvidia-driver-545\n  - nvidia-cuda-toolkit" if gpu else ""
+    # ubuntu-drivers-common's autoinstall picks the driver branch that
+    # matches the running Ubuntu release; a pinned nvidia-driver-NNN package
+    # (e.g. 545, a jammy/22.04 branch) silently fails to install on newer
+    # releases like the noble/24.04 AMI this project provisions.
+    gpu_pkg = "\n  - ubuntu-drivers-common\n  - nvidia-cuda-toolkit" if gpu else ""
     # nvidia-container-toolkit isn't in Ubuntu's default apt sources, so it
     # can't go in `packages:` — its repo has to be added in runcmd, and the
     # containerd config.toml.tmpl written before the first `k3s agent`
@@ -186,6 +190,7 @@ def cloud_init_agent(token: str, server_ip: str, gpu: bool = False) -> str:
     # restart needed. --node-label makes the node self-identifying in
     # Kubernetes without any post-provision matching.
     gpu_cmd = (
+        "\n  - ubuntu-drivers autoinstall"
         "\n  - nvidia-smi"
         "\n  - mkdir -p /var/lib/rancher/k3s/agent/etc/containerd"
         "\n  - curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg"
@@ -199,11 +204,12 @@ def cloud_init_agent(token: str, server_ip: str, gpu: bool = False) -> str:
 {_base_packages().rstrip()}{gpu_pkg}
 runcmd:
   - systemctl enable --now open-iscsi{gpu_cmd}
-  - curl -sfL https://get.k3s.io | \\
-    INSTALL_K3S_VERSION="{K3S_VERSION}" \\
-    K3S_TOKEN="{token}" \\
-    K3S_URL="https://{server_ip}:6443" \\
-    sh -s - agent{node_label}
+  - |
+    curl -sfL https://get.k3s.io | \\
+      INSTALL_K3S_VERSION="{K3S_VERSION}" \\
+      K3S_TOKEN="{token}" \\
+      K3S_URL="https://{server_ip}:6443" \\
+      sh -s - agent{node_label}
 """
 
 # ── Compute instances ─────────────────────────────────────────────────────────

@@ -27,9 +27,11 @@ on:
         default: ""
         description: >
           age public key to encrypt the cluster output artifact before upload.
-          If provided, output/<cluster-name>.json is encrypted with sops and
-          uploaded as <cluster-name>.json.enc. Generate a keypair with age-keygen;
-          store the private key as SOPS_AGE_KEY in your repo secrets for decryption.
+          If provided, output/<cluster-name>.json and the SSH private key
+          (<cluster-name>-ssh.pem) are encrypted with sops and uploaded as
+          <cluster-name>.json.enc / <cluster-name>-ssh.pem.enc. Generate a
+          keypair with age-keygen; store the private key as SOPS_AGE_KEY in
+          your repo secrets for decryption.
       image:
         required: false
         type: string
@@ -135,13 +137,18 @@ jobs:
           sops --encrypt \
             "output/${{ steps.load-config.outputs.cluster_name }}.json" \
             > "output/${{ steps.load-config.outputs.cluster_name }}.json.enc"
+          sops --encrypt --input-type binary --output-type binary \
+            "output/${{ steps.load-config.outputs.cluster_name }}-ssh.pem" \
+            > "output/${{ steps.load-config.outputs.cluster_name }}-ssh.pem.enc"
 
       - name: Upload cluster output
         if: inputs.action == 'provision' && inputs.sops_age_recipient == ''
         uses: actions/upload-artifact@v4
         with:
           name: cluster-output-${{ steps.load-config.outputs.cluster_name }}
-          path: output/${{ steps.load-config.outputs.cluster_name }}.json
+          path: |
+            output/${{ steps.load-config.outputs.cluster_name }}.json
+            output/${{ steps.load-config.outputs.cluster_name }}-ssh.pem
           retention-days: 7
 
       - name: Upload cluster output (encrypted)
@@ -149,5 +156,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: cluster-output-${{ steps.load-config.outputs.cluster_name }}
-          path: output/${{ steps.load-config.outputs.cluster_name }}.json.enc
+          path: |
+            output/${{ steps.load-config.outputs.cluster_name }}.json.enc
+            output/${{ steps.load-config.outputs.cluster_name }}-ssh.pem.enc
           retention-days: 7
