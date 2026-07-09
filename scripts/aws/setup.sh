@@ -27,6 +27,9 @@ if echo "${CALLER_ARN}" | grep -q ":user/k3s-anywhere-provisioner"; then
     echo "       that sets AWS_ACCESS_KEY_ID) from the docker run command." >&2
     exit 1
 fi
+# Strip stray whitespace/newlines (e.g. a pasted GitHub Secret) before it
+# feeds into the default-fallback below.
+STATE_BUCKET_NAME="$(printf '%s' "${STATE_BUCKET_NAME:-}" | tr -d '[:space:]')"
 BUCKET="${STATE_BUCKET_NAME:-k3s-anywhere-state-${ACCOUNT_ID}}"
 USER_NAME="k3s-anywhere-provisioner"
 POLICY_NAME="k3s-anywhere-provisioner-policy"

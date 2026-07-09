@@ -26,6 +26,9 @@ set -euo pipefail
 REGION="${AWS_REGION:-us-east-1}"
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text) \
     || { echo "ERROR: admin credentials not found. Mount ~/.aws or set AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY." >&2; exit 1; }
+# Strip stray whitespace/newlines (e.g. a pasted GitHub Secret) before it
+# feeds into the default-fallback below.
+STATE_BUCKET_NAME="$(printf '%s' "${STATE_BUCKET_NAME:-}" | tr -d '[:space:]')"
 BUCKET="${STATE_BUCKET_NAME:-k3s-anywhere-state-${ACCOUNT_ID}}"
 USER_NAME="k3s-anywhere-provisioner"
 POLICY_NAME="k3s-anywhere-provisioner-policy"

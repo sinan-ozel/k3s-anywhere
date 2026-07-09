@@ -40,8 +40,13 @@ if [ "$ACTION" = "decommission" ]; then
 fi
 
 [ -n "${CLUSTER_NAME:-}" ] || error "CLUSTER_NAME is not set."
-[ -n "${STATE_BUCKET_NAME:-}" ] || error "STATE_BUCKET_NAME is not set."
 [ -n "${PULUMI_CONFIG_PASSPHRASE:-}" ] || error "PULUMI_CONFIG_PASSPHRASE is not set."
+
+# Strip stray whitespace/newlines — e.g. a pasted GitHub Secret or a
+# CRLF-edited .env file — so a hidden trailing \r doesn't make head-bucket
+# fail with a confusing "bucket not found" against a bucket that exists.
+STATE_BUCKET_NAME="$(printf '%s' "${STATE_BUCKET_NAME:-}" | tr -d '[:space:]')"
+[ -n "${STATE_BUCKET_NAME}" ] || error "STATE_BUCKET_NAME is not set."
 
 case "$PROVIDER" in
   exoscale)

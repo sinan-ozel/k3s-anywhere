@@ -44,6 +44,20 @@
 			"presentation": { "reveal": "always", "panel": "dedicated" }
 		},
 		{
+			"label": "k3s: Check status (Exoscale)",
+			"type": "shell",
+			"command": "docker run --rm --env-file configs/example.env --env-file .env.secrets -e ACTION=check -e PROVIDER=exoscale -v ${workspaceFolder}/output:/app/output sinanozel/k3s-anywhere:latest",
+			"problemMatcher": [],
+			"presentation": { "reveal": "always", "panel": "dedicated" }
+		},
+		{
+			"label": "k3s: Check status (AWS)",
+			"type": "shell",
+			"command": "docker run --rm --env-file configs/example.env --env-file .env.secrets -e ACTION=check -e PROVIDER=aws -v ${workspaceFolder}/output:/app/output sinanozel/k3s-anywhere:latest",
+			"problemMatcher": [],
+			"presentation": { "reveal": "always", "panel": "dedicated" }
+		},
+		{
 			"label": "k3s: Get kubeconfig",
 			"type": "shell",
 			"command": "CLUSTER_NAME=$(grep '^CLUSTER_NAME=' configs/example.env | cut -d= -f2) && jq -r '.kubeconfig' output/${CLUSTER_NAME}.json > ~/.kube/${CLUSTER_NAME}.yaml && echo \"Kubeconfig written to ~/.kube/${CLUSTER_NAME}.yaml\"",

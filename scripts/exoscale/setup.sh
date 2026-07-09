@@ -15,6 +15,9 @@
 set -euo pipefail
 
 ZONE="${EXOSCALE_ZONE:-ch-gva-2}"
+# Strip stray whitespace/newlines (e.g. a pasted GitHub Secret) before it
+# feeds into the default-fallback below.
+STATE_BUCKET_NAME="$(printf '%s' "${STATE_BUCKET_NAME:-}" | tr -d '[:space:]')"
 BUCKET="${STATE_BUCKET_NAME:-k3s-anywhere-state}"
 ROLE_NAME="k3s-anywhere-provisioner"
 KEY_NAME="k3s-anywhere-key"
