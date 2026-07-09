@@ -80,12 +80,14 @@ esac
 
 setup_missing() {
   cat >&2 <<EOF
-ERROR: Cannot reach Pulumi state bucket '${STATE_BUCKET_NAME}'.
+ERROR: Pulumi state bucket '${STATE_BUCKET_NAME}' does not exist (or the
+credentials can't see it) for provider '${PROVIDER}'.
+
+AWS said:
+${HEAD_BUCKET_ERR}
 
 This usually means one of:
   - first-time setup has never been run for this ${PROVIDER} account, or
-  - the credentials provided here are not the provisioner credentials
-    that setup printed (check your GitHub Secrets / .env.secrets), or
   - STATE_BUCKET_NAME does not match the bucket setup created.
 
 First-time setup runs once per account, locally, with admin credentials
@@ -118,19 +120,71 @@ EOF
   exit 1
 }
 
+credentials_invalid() {
+  cat >&2 <<EOF
+ERROR: ${PROVIDER} rejected the credentials while checking for the Pulumi
+state bucket '${STATE_BUCKET_NAME}'.
+
+AWS said:
+${HEAD_BUCKET_ERR}
+
+This usually means one of:
+  - the access key was rotated (e.g. ACTION=setup was rerun with
+    ROTATE_KEY=true) and this container still has the old secret, or
+  - the credentials are simply wrong, unset, or expired.
+
+Update your GitHub Secrets / .env.secrets with the current provisioner
+credentials — the most recent ACTION=setup run printed them — then retry.
+EOF
+  exit 1
+}
+
+access_denied() {
+  cat >&2 <<EOF
+ERROR: ${PROVIDER} accepted these credentials but denied access to bucket
+'${STATE_BUCKET_NAME}'.
+
+AWS said:
+${HEAD_BUCKET_ERR}
+
+This usually means one of:
+  - STATE_BUCKET_NAME points at a bucket these credentials were never
+    granted access to (check for typos, or that it matches what setup
+    printed), or
+  - the provisioner policy is out of date — rerun ACTION=setup (without
+    ROTATE_KEY) to refresh it.
+EOF
+  exit 1
+}
+
+# Runs `aws s3api head-bucket ...` and, on failure, routes to the error
+# handler that matches *why* it failed — bad credentials, valid credentials
+# without access, or the bucket genuinely not existing — instead of treating
+# every failure as "first-time setup was never run", which is misleading
+# when the real problem is a stale rotated key.
+check_state_bucket() {
+  HEAD_BUCKET_ERR="$(aws s3api head-bucket --bucket "${STATE_BUCKET_NAME}" "$@" 2>&1 >/dev/null)" && return 0
+  if echo "${HEAD_BUCKET_ERR}" | grep -qiE \
+      'InvalidAccessKeyId|SignatureDoesNotMatch|UnrecognizedClientException|ExpiredToken|InvalidClientTokenId|AuthFailure|InvalidSecurity|InvalidAccessKey'; then
+    credentials_invalid
+  elif echo "${HEAD_BUCKET_ERR}" | grep -qiE '(^|[^0-9])403([^0-9]|$)|Forbidden|AccessDenied'; then
+    access_denied
+  else
+    setup_missing
+  fi
+}
+
 case "$PROVIDER" in
   exoscale)
     # Pulumi S3 backend against Exoscale SOS — use Exoscale keys as AWS creds
     export AWS_ACCESS_KEY_ID="${EXOSCALE_API_KEY}"
     export AWS_SECRET_ACCESS_KEY="${EXOSCALE_API_SECRET}"
     BACKEND_URL="s3://${STATE_BUCKET_NAME}?endpoint=https://sos-${EXOSCALE_ZONE}.exo.io&awssdk=v2&region=us-east-1"
-    aws s3api head-bucket --bucket "${STATE_BUCKET_NAME}" \
-      --endpoint-url "https://sos-${EXOSCALE_ZONE}.exo.io" --region us-east-1 \
-      >/dev/null 2>&1 || setup_missing
+    check_state_bucket --endpoint-url "https://sos-${EXOSCALE_ZONE}.exo.io" --region us-east-1
     ;;
   aws)
     BACKEND_URL="s3://${STATE_BUCKET_NAME}"
-    aws s3api head-bucket --bucket "${STATE_BUCKET_NAME}" >/dev/null 2>&1 || setup_missing
+    check_state_bucket
     ;;
   gcp)
     BACKEND_URL="gs://${STATE_BUCKET_NAME}"
