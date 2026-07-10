@@ -220,8 +220,15 @@ case "$ACTION" in
       _KEY_NAME="${CLUSTER_NAME}-key"
       if aws ec2 describe-key-pairs --key-names "${_KEY_NAME}" \
           >/dev/null 2>&1; then
-        _STACK_JSON=$(pulumi stack export 2>/dev/null || echo "{}")
-        if ! echo "${_STACK_JSON}" | grep -q 'aws:ec2/keyPair:KeyPair'; then
+        # Don't pipe the state into grep -q here: grep -q exits at the first
+        # match, the writer gets SIGPIPE on any state larger than the pipe
+        # buffer, and with pipefail the pipeline reports failure (141) even
+        # though the key pair WAS in state — which deleted live key pairs on
+        # every re-provision. Bash substring match avoids the pipe entirely.
+        # Fail-safe: only delete when the export succeeded AND positively
+        # lacks the key pair; a failed export must never trigger deletion.
+        if _STACK_JSON=$(pulumi stack export 2>/dev/null) \
+            && [[ "${_STACK_JSON}" != *'aws:ec2/keyPair:KeyPair'* ]]; then
           echo "Removing orphaned key pair ${_KEY_NAME} (will be recreated)..."
           aws ec2 delete-key-pair --key-name "${_KEY_NAME}"
         fi
