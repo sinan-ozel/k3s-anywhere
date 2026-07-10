@@ -230,6 +230,11 @@ case "$ACTION" in
     pulumi up --yes --non-interactive
     pulumi stack output --show-secrets --json > "/app/output/${CLUSTER_NAME}-infra.json"
     "/app/scripts/${PROVIDER}/cluster/post_provision.sh"
+    # This container runs as root, so files it writes into the bind-mounted
+    # output/ dir land on the host owned by root. The calling workflow reads
+    # them (e.g. to sops-encrypt) as the non-root runner user, so make sure
+    # they're at least readable regardless of who owns them.
+    chmod -R a+r /app/output
     ;;
   teardown)
     if [ -f "/app/output/${CLUSTER_NAME}-kubeconfig.yaml" ]; then
