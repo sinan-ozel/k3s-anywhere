@@ -144,7 +144,7 @@ The following are fixed per provider and not configurable:
 
 | Setting | Exoscale | AWS | GCP (planned) |
 |---|---|---|---|
-| CPU instance | `standard.medium` | `t3.medium` | `e2-standard-2` |
+| CPU instance | `standard.medium` | `m6i.large` | `e2-standard-2` |
 | GPU instance | `gpua30.small` | `g4dn.2xlarge` | `n1-standard-4` + T4 |
 | OS image | Ubuntu 24.04 LTS | Ubuntu 24.04 LTS | Ubuntu 24.04 LTS |
 | k3s version | pinned (`K3S_VERSION`) | same | same |

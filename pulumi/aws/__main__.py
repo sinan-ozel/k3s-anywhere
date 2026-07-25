@@ -242,7 +242,7 @@ server_0_init = (
 
 server_0 = aws.ec2.Instance(
     f"{CLUSTER_NAME}-server-0",
-    instance_type="t3.medium",
+    instance_type="m6i.large",
     user_data=server_0_init,
     tags=_tags(f"{CLUSTER_NAME}-server-0", _teardown),
     **_common,
@@ -268,7 +268,7 @@ for i in range(1, DEFAULT_NODES):
     )
     node = aws.ec2.Instance(
         f"{CLUSTER_NAME}-server-{i}",
-        instance_type="t3.medium",
+        instance_type="m6i.large",
         user_data=init,
         tags=_tags(f"{CLUSTER_NAME}-server-{i}", _teardown),
         opts=_join_opts,

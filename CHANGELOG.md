@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.2.0] - 2026-07-25
+
+- **AWS** Default node instance type changed from `t3.medium` to `m6i.large`: `t3.medium`'s burstable 2 vCPU / 4 GiB was insufficient to reliably host the k3s control plane. `m6i.large` (2 vCPU, unthrottled / 8 GiB) removes the CPU-credit throttling risk for etcd and doubles available memory, at roughly 2.3x the on-demand hourly cost.
+
 ## [0.1.11] - 2026-07-10
 
 - **AWS** Fix orphan-key-pair guard deleting the live key pair on every re-provision: piping `pulumi stack export` into `grep -q` triggered SIGPIPE under `pipefail` once state exceeded the pipe buffer, so the check always reported "not found" and deleted the in-use key pair, breaking the following `pulumi up` with `InvalidKeyPair.NotFound`. Replaced with a pipe-free bash substring match that only deletes when the export succeeds and positively lacks the key pair.
