@@ -7,7 +7,7 @@ Provision a k3s cluster on any supported cloud provider and get back a working k
 | Provider | Implemented | Tested w/ Default Nodes | Tested w/ GPU Nodes |
 |---|---|---|---|
 | Exoscale | ✓ | | |
-| AWS | ✓ | ✓ (v0.1.3) | |
+| AWS | ✓ | ✓ (v0.2.0) | |
 | GCP | | | |
 
 ## How it works
