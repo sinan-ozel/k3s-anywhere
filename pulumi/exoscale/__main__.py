@@ -165,6 +165,17 @@ runcmd:
     # nvidia-container-toolkit + the k3s agent join from a oneshot systemd
     # unit on the NEXT boot, once whatever driver got installed is actually
     # loaded.
+    #
+    # --set-as-default: nothing has rendered k3s's own containerd base config
+    # yet at this point (k3s only writes config.toml.tmpl on first start, and
+    # this all runs before that), so nvidia-ctk's config.toml.tmpl + conf.d
+    # drop-in defines an "nvidia" runtime but no "runc" one. The CRI plugin
+    # still defaults default_runtime_name to "runc" internally, finds no
+    # matching runtime block, and refuses to load — k3s-agent then hangs
+    # forever on "Waiting for containerd startup". --set-as-default points
+    # default_runtime_name at "nvidia" instead, which is safe for non-GPU
+    # pods too: nvidia-container-runtime transparently behaves like plain
+    # runc unless a container actually requests a GPU.
     finish_script = f"""#!/bin/bash
 set -e
 curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
@@ -172,7 +183,7 @@ curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-contai
 apt-get update
 apt-get install -y nvidia-container-toolkit
 mkdir -p /var/lib/rancher/k3s/agent/etc/containerd
-nvidia-ctk runtime configure --runtime=containerd --config=/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl
+nvidia-ctk runtime configure --runtime=containerd --config=/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl --set-as-default
 nvidia-smi
 {join_cmd}
 systemctl disable k3s-gpu-finish.service

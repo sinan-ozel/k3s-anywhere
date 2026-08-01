@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.2.2] - 2026-08-01
+
+- **AWS, Exoscale** Fix GPU agent nodes still never joining the cluster after v0.2.1: with no pre-existing containerd base config to merge into, `nvidia-ctk runtime configure` defines an `nvidia` containerd runtime but no `runc` one. containerd's CRI plugin defaults `default_runtime_name` to `"runc"` internally, finds no matching runtime block, and refuses to load — `k3s-agent` hangs forever on "Waiting for containerd startup" even though the driver loaded correctly. Pass `--set-as-default` so `nvidia-ctk` points `default_runtime_name` at `nvidia` instead, which is safe for non-GPU pods too since `nvidia-container-runtime` transparently behaves like plain `runc` unless a container actually requests a GPU.
+
 ## [0.2.1] - 2026-08-01
 
 - **AWS, Exoscale** Fix GPU agent nodes never joining the cluster: `ubuntu-drivers autoinstall` can pull in a newer kernel package as a dependency without the instance rebooting into it, leaving the installed nvidia `.ko` built only for the new kernel. `nvidia-smi` then fails against the still-running old kernel, nvidia-ctk's containerd config points at a runtime that can never initialize, and `k3s-agent` hangs forever on "Waiting for containerd startup" — the node never registers with the cluster. Now reboots unconditionally right after the driver install and finishes `nvidia-container-toolkit` setup + the k3s agent join from a oneshot systemd unit on the next boot.
