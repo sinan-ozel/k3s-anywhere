@@ -131,38 +131,81 @@ runcmd:
 """
 
 def cloud_init_agent(token: str, server_ip: str, gpu: bool = False) -> str:
+    node_label = " --node-label k3s-anywhere.io/gpu-node=true" if gpu else ""
+    join_cmd = (
+        "curl -sfL https://get.k3s.io | \\\n"
+        f'INSTALL_K3S_VERSION="{K3S_VERSION}" \\\n'
+        f'K3S_TOKEN="{token}" \\\n'
+        f'K3S_URL="https://{server_ip}:6443" \\\n'
+        f"sh -s - agent{node_label}"
+    )
+
+    if not gpu:
+        return f"""#cloud-config
+{_base_packages().rstrip()}
+runcmd:
+  - systemctl enable --now open-iscsi
+  - |
+{textwrap.indent(join_cmd, '    ')}
+"""
+
     # ubuntu-drivers-common's autoinstall picks the driver branch that
     # matches the running Ubuntu release; a pinned nvidia-driver-NNN package
     # (e.g. 545, a jammy/22.04 branch) silently fails to install on newer
     # releases like the noble/24.04 template this project provisions.
-    gpu_pkg = "\n  - ubuntu-drivers-common\n  - nvidia-cuda-toolkit" if gpu else ""
-    # nvidia-container-toolkit isn't in Ubuntu's default apt sources, so it
-    # can't go in `packages:` — its repo has to be added in runcmd, and the
-    # containerd config.toml.tmpl written before the first `k3s agent`
-    # start, so containerd picks up the nvidia runtime on boot with no
-    # restart needed. --node-label makes the node self-identifying in
-    # Kubernetes without any post-provision matching.
-    gpu_cmd = (
-        "\n  - ubuntu-drivers autoinstall"
-        "\n  - nvidia-smi"
-        "\n  - mkdir -p /var/lib/rancher/k3s/agent/etc/containerd"
-        "\n  - curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg"
-        "\n  - bash -c \"curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' > /etc/apt/sources.list.d/nvidia-container-toolkit.list\""
-        "\n  - apt-get update"
-        "\n  - apt-get install -y nvidia-container-toolkit"
-        "\n  - nvidia-ctk runtime configure --runtime=containerd --config=/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl"
-    ) if gpu else ""
-    node_label = " --node-label k3s-anywhere.io/gpu-node=true" if gpu else ""
+    #
+    # autoinstall can also pull in a newer kernel package as a dependency
+    # without the instance rebooting into it. If that happens, the installed
+    # nvidia .ko only exists for the NEW kernel, `nvidia-smi` fails against
+    # the still-running OLD one, and nvidia-ctk's containerd config ends up
+    # pointing at a runtime that can never initialize — k3s-agent then hangs
+    # forever on "Waiting for containerd startup" and the node never joins
+    # the cluster. So: reboot unconditionally right after the driver install
+    # (cheap even when no kernel bump happened) and finish
+    # nvidia-container-toolkit + the k3s agent join from a oneshot systemd
+    # unit on the NEXT boot, once whatever driver got installed is actually
+    # loaded.
+    finish_script = f"""#!/bin/bash
+set -e
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' > /etc/apt/sources.list.d/nvidia-container-toolkit.list
+apt-get update
+apt-get install -y nvidia-container-toolkit
+mkdir -p /var/lib/rancher/k3s/agent/etc/containerd
+nvidia-ctk runtime configure --runtime=containerd --config=/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl
+nvidia-smi
+{join_cmd}
+systemctl disable k3s-gpu-finish.service
+"""
+
     return f"""#cloud-config
-{_base_packages().rstrip()}{gpu_pkg}
+{_base_packages().rstrip()}
+  - ubuntu-drivers-common
+  - nvidia-cuda-toolkit
+write_files:
+  - path: /usr/local/bin/k3s-gpu-finish.sh
+    permissions: '0700'
+    content: |
+{textwrap.indent(finish_script, '      ')}
+  - path: /etc/systemd/system/k3s-gpu-finish.service
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=Finish GPU k3s agent setup after driver-required reboot
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/bin/k3s-gpu-finish.sh
+
+      [Install]
+      WantedBy=multi-user.target
 runcmd:
-  - systemctl enable --now open-iscsi{gpu_cmd}
-  - |
-    curl -sfL https://get.k3s.io | \\
-      INSTALL_K3S_VERSION="{K3S_VERSION}" \\
-      K3S_TOKEN="{token}" \\
-      K3S_URL="https://{server_ip}:6443" \\
-      sh -s - agent{node_label}
+  - systemctl enable --now open-iscsi
+  - ubuntu-drivers autoinstall
+  - systemctl enable k3s-gpu-finish.service
+  - reboot
 """
 
 # ── Compute instances ─────────────────────────────────────────────────────────
