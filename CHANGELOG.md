@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.2.1] - 2026-08-01
+
+- **AWS, Exoscale** Fix GPU agent nodes never joining the cluster: `ubuntu-drivers autoinstall` can pull in a newer kernel package as a dependency without the instance rebooting into it, leaving the installed nvidia `.ko` built only for the new kernel. `nvidia-smi` then fails against the still-running old kernel, nvidia-ctk's containerd config points at a runtime that can never initialize, and `k3s-agent` hangs forever on "Waiting for containerd startup" — the node never registers with the cluster. Now reboots unconditionally right after the driver install and finishes `nvidia-container-toolkit` setup + the k3s agent join from a oneshot systemd unit on the next boot.
+
 ## [0.2.0] - 2026-07-25
 
 - **AWS** Default node instance type changed from `t3.medium` to `m6i.large`: `t3.medium`'s burstable 2 vCPU / 4 GiB was insufficient to reliably host the k3s control plane. `m6i.large` (2 vCPU, unthrottled / 8 GiB) removes the CPU-credit throttling risk for etcd and doubles available memory, at roughly 2.3x the on-demand hourly cost.
