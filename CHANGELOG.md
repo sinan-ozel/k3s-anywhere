@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.2.3] - 2026-08-21
+
+- **AWS, Exoscale** Fix GPU agent nodes joining but never going Ready: current `nvidia-ctk` releases write `config.toml.tmpl` as a drop-in stub (`imports = [...]; version = 2`) instead of an inline runtime block, with no `{{ template "base" . }}` directive. k3s's templating only injects its own required settings — notably the CNI `bin_dir`/`conf_dir` pointing at `/var/lib/rancher/k3s/agent/etc/cni/net.d` — by expanding that directive, so without it k3s passes the stub straight through unchanged. containerd's CRI plugin then falls back to its upstream default CNI `conf_dir` (`/etc/cni/net.d`), which k3s never populates, and kubelet hangs forever on "cni plugin not initialized" even though `k3s-agent` is running and the node has a pod CIDR. After `nvidia-ctk` writes the stub, drop its `version` line (the base template supplies its own) and prepend `{{ template "base" . }}` so k3s still injects its own settings around nvidia-ctk's `imports` line.
+
 ## [0.2.2] - 2026-08-01
 
 - **AWS, Exoscale** Fix GPU agent nodes still never joining the cluster after v0.2.1: with no pre-existing containerd base config to merge into, `nvidia-ctk runtime configure` defines an `nvidia` containerd runtime but no `runc` one. containerd's CRI plugin defaults `default_runtime_name` to `"runc"` internally, finds no matching runtime block, and refuses to load — `k3s-agent` hangs forever on "Waiting for containerd startup" even though the driver loaded correctly. Pass `--set-as-default` so `nvidia-ctk` points `default_runtime_name` at `nvidia` instead, which is safe for non-GPU pods too since `nvidia-container-runtime` transparently behaves like plain `runc` unless a container actually requests a GPU.

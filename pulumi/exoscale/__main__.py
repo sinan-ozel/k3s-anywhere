@@ -176,6 +176,20 @@ runcmd:
     # default_runtime_name at "nvidia" instead, which is safe for non-GPU
     # pods too: nvidia-container-runtime transparently behaves like plain
     # runc unless a container actually requests a GPU.
+    #
+    # Current nvidia-ctk releases write config.toml.tmpl as a drop-in stub
+    # (`imports = [...]; version = 2`) rather than an inline runtime block,
+    # with no `{{ template "base" . }}` directive. k3s's own templating only
+    # injects its required settings — notably the CNI bin_dir/conf_dir
+    # pointing at /var/lib/rancher/k3s/agent/etc/cni/net.d — by expanding
+    # that directive; without it k3s passes the stub straight through
+    # unchanged. containerd's CRI plugin then falls back to its upstream
+    # default CNI conf_dir (/etc/cni/net.d), which k3s never populates, and
+    # kubelet hangs forever on "cni plugin not initialized" — the node joins
+    # and gets a pod CIDR but never goes Ready. Fix: after nvidia-ctk writes
+    # the stub, drop its `version` line (the base template supplies its own)
+    # and prepend the base directive so k3s still injects its own settings
+    # around nvidia-ctk's `imports` line.
     finish_script = f"""#!/bin/bash
 set -e
 curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
@@ -184,6 +198,8 @@ apt-get update
 apt-get install -y nvidia-container-toolkit
 mkdir -p /var/lib/rancher/k3s/agent/etc/containerd
 nvidia-ctk runtime configure --runtime=containerd --config=/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl --set-as-default
+grep -v '^version = ' /var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl > /tmp/nvidia-ctk.toml
+{{ echo '{{{{ template "base" . }}}}'; cat /tmp/nvidia-ctk.toml; }} > /var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl
 nvidia-smi
 {join_cmd}
 systemctl disable k3s-gpu-finish.service
