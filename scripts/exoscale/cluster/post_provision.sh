@@ -59,6 +59,16 @@ export KUBECONFIG="$KUBECONFIG_FILE"
 TOTAL_NODES=$((DEFAULT_NODE_COUNT + GPU_NODE_COUNT))
 REPLICA_COUNT=$(( TOTAL_NODES < 3 ? TOTAL_NODES : 3 ))
 
+# defaultSettings.defaultReplicaCount only sets the replica count Longhorn's
+# own UI uses when creating a volume by hand — the chart's own values.yaml
+# says so directly ("For Kubernetes configuration, modify the
+# `numberOfReplicas` field in the StorageClass"). The StorageClass PVCs
+# actually bind against (auto-created here via persistence.defaultClass)
+# is controlled by persistence.defaultClassReplicaCount instead, which
+# defaults to 3 regardless of defaultSettings.defaultReplicaCount. Without
+# setting it too, every PVC below a 3-node cluster gets a StorageClass
+# asking for more replicas than there are nodes, and Attach never
+# succeeds — set both so the actual PVC path is fixed, not just the UI one.
 echo "Installing Longhorn ${LONGHORN_VERSION} (replicas: ${REPLICA_COUNT})..."
 helm repo add longhorn https://charts.longhorn.io
 helm repo update
@@ -68,6 +78,7 @@ helm upgrade --install longhorn longhorn/longhorn \
     --create-namespace \
     --version "${LONGHORN_VERSION}" \
     --set defaultSettings.defaultReplicaCount="${REPLICA_COUNT}" \
+    --set persistence.defaultClassReplicaCount="${REPLICA_COUNT}" \
     --set defaultSettings.staleReplicaTimeout=2880 \
     --set persistence.defaultClass=true \
     --set persistence.reclaimPolicy=Retain \

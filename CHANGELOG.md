@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.2.4] - 2026-08-22
+
+- **AWS, Exoscale** Fix Longhorn PVCs stuck permanently in `AttachVolume.Attach failed ... not ready for workloads` on clusters with fewer than 3 nodes: `post_provision.sh` already computed a node-count-aware `REPLICA_COUNT = min(TOTAL_NODES, 3)`, but passed it only via `defaultSettings.defaultReplicaCount`, a Helm value that (per the Longhorn chart's own values.yaml) only controls the replica count for volumes created by hand through Longhorn's UI. The StorageClass that PVCs actually bind against is controlled by the separate `persistence.defaultClassReplicaCount` value, which was never set and silently kept the chart's own default of 3 regardless of cluster size — so every PVC on a 1- or 2-node cluster asked for more replicas than there were nodes to place them on, and never attached. Now sets both.
+
 ## [0.2.3] - 2026-08-21
 
 - **AWS, Exoscale** Fix GPU agent nodes joining but never going Ready: current `nvidia-ctk` releases write `config.toml.tmpl` as a drop-in stub (`imports = [...]; version = 2`) instead of an inline runtime block, with no `{{ template "base" . }}` directive. k3s's templating only injects its own required settings — notably the CNI `bin_dir`/`conf_dir` pointing at `/var/lib/rancher/k3s/agent/etc/cni/net.d` — by expanding that directive, so without it k3s passes the stub straight through unchanged. containerd's CRI plugin then falls back to its upstream default CNI `conf_dir` (`/etc/cni/net.d`), which k3s never populates, and kubelet hangs forever on "cni plugin not initialized" even though `k3s-agent` is running and the node has a pod CIDR. After `nvidia-ctk` writes the stub, drop its `version` line (the base template supplies its own) and prepend `{{ template "base" . }}` so k3s still injects its own settings around nvidia-ctk's `imports` line.
