@@ -233,10 +233,25 @@ runcmd:
     # unchanged. containerd's CRI plugin then falls back to its upstream
     # default CNI conf_dir (/etc/cni/net.d), which k3s never populates, and
     # kubelet hangs forever on "cni plugin not initialized" — the node joins
-    # and gets a pod CIDR but never goes Ready. Fix: after nvidia-ctk writes
-    # the stub, drop its `version` line (the base template supplies its own)
-    # and prepend the base directive so k3s still injects its own settings
-    # around nvidia-ctk's `imports` line.
+    # and gets a pod CIDR but never goes Ready.
+    #
+    # Prepending the base directive in front of the stub's `imports = [...]`
+    # line fixes the CNI path, but leaves `default_runtime_name = "nvidia"`
+    # sitting only in the imported drop-in file
+    # (/etc/containerd/conf.d/*.toml) — confirmed by hand that k3s/containerd
+    # merge the drop-in's new `runtimes.nvidia` table in fine, but silently
+    # drop that sibling scalar since k3s's base template already declares
+    # the same `[plugins."io.containerd.grpc.v1.cri".containerd]` table
+    # (for snapshotter settings) and the merge doesn't override it. Net
+    # effect: every pod without an explicit RuntimeClass still runs under
+    # plain runc — no /dev/nvidia* devices — even though nvidia-smi works
+    # fine on the host and the "nvidia" runtime handler is registered.
+    # Fix: instead of inlining just the stub's `imports = [...]` pointer,
+    # resolve that pointer to the actual drop-in file and inline ITS
+    # content — the same structure nvidia-ctk produced before it switched to
+    # drop-in mode, which is known to render and merge correctly since it's
+    # all one file k3s templates in a single pass rather than a cross-file
+    # containerd-side merge.
     finish_script = f"""#!/bin/bash
 set -e
 curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
@@ -245,7 +260,8 @@ apt-get update
 apt-get install -y nvidia-container-toolkit
 mkdir -p /var/lib/rancher/k3s/agent/etc/containerd
 nvidia-ctk runtime configure --runtime=containerd --config=/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl --set-as-default
-grep -v '^version = ' /var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl > /tmp/nvidia-ctk.toml
+NVIDIA_DROPIN=$(awk -F'"' '/imports = /{{print $2}}' /var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl)
+grep -v '^version = ' $NVIDIA_DROPIN > /tmp/nvidia-ctk.toml
 {{ echo '{{{{ template "base" . }}}}'; cat /tmp/nvidia-ctk.toml; }} > /var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl
 nvidia-smi
 {join_cmd}
