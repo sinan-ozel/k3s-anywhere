@@ -191,20 +191,23 @@ runcmd:
     # Prepending the base directive in front of the stub's `imports = [...]`
     # line fixes the CNI path, but leaves `default_runtime_name = "nvidia"`
     # sitting only in the imported drop-in file
-    # (/etc/containerd/conf.d/*.toml) — confirmed by hand that k3s/containerd
-    # merge the drop-in's new `runtimes.nvidia` table in fine, but silently
-    # drop that sibling scalar since k3s's base template already declares
-    # the same `[plugins."io.containerd.grpc.v1.cri".containerd]` table
-    # (for snapshotter settings) and the merge doesn't override it. Net
-    # effect: every pod without an explicit RuntimeClass still runs under
-    # plain runc — no /dev/nvidia* devices — even though nvidia-smi works
-    # fine on the host and the "nvidia" runtime handler is registered.
-    # Fix: instead of inlining just the stub's `imports = [...]` pointer,
-    # resolve that pointer to the actual drop-in file and inline ITS
-    # content — the same structure nvidia-ctk produced before it switched to
-    # drop-in mode, which is known to render and merge correctly since it's
-    # all one file k3s templates in a single pass rather than a cross-file
-    # containerd-side merge.
+    # (/etc/containerd/conf.d/*.toml). v0.2.5 and v0.2.6 both tried to fix
+    # that by inlining the drop-in's actual content into config.toml.tmpl
+    # directly instead of just the `imports = [...]` pointer — but that
+    # makes config.toml.tmpl declare
+    # `[plugins."io.containerd.grpc.v1.cri".containerd]` TWICE in one file
+    # (once via the expanded base template's own snapshotter settings, once
+    # via our inlined content's default_runtime_name), which is invalid
+    # TOML for a single document even though the SAME duplication across
+    # two cross-file `imports` targets is an explicitly supported
+    # containerd merge feature. Every GPU node provisioned under v0.2.5/
+    # v0.2.6 failed to join at all as a result — worse than the original
+    # gap this was meant to close. Reverted to just prepending the base
+    # directive in front of the unmodified `imports = [...]` pointer: GPU
+    # nodes join Ready again (confirmed working), at the cost of pods
+    # needing an explicit `runtimeClassName: nvidia` to get GPU access
+    # rather than getting it by default — see the campaign-setting-
+    # query-engine chart's RuntimeClass resource for that side of the fix.
     finish_script = f"""#!/bin/bash
 set -e
 curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
@@ -213,21 +216,7 @@ apt-get update
 apt-get install -y nvidia-container-toolkit
 mkdir -p /var/lib/rancher/k3s/agent/etc/containerd
 nvidia-ctk runtime configure --runtime=containerd --config=/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl --set-as-default
-# Don't parse the stub's `imports = [...]` line for the drop-in path — its
-# exact text format has already changed across nvidia-ctk releases and
-# broke this once (an unmatched pattern left the variable empty, `grep`
-# read from stdin instead of a file, hit immediate EOF under systemd, and
-# `set -e` killed the whole script before it ever reached the k3s join).
-# Glob the drop-in's well-known fixed directory directly instead, and fall
-# back to the --config target itself if nvidia-ctk didn't use drop-in mode
-# at all on this release.
-NVIDIA_SRC=/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl
-for f in /etc/containerd/conf.d/*.toml; do
-  if [ -f "$f" ]; then
-    NVIDIA_SRC="$f"
-  fi
-done
-grep -v '^version = ' "$NVIDIA_SRC" > /tmp/nvidia-ctk.toml
+grep -v '^version = ' /var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl > /tmp/nvidia-ctk.toml
 {{ echo '{{{{ template "base" . }}}}'; cat /tmp/nvidia-ctk.toml; }} > /var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl
 nvidia-smi
 {join_cmd}
