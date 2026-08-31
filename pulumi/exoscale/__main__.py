@@ -213,8 +213,21 @@ apt-get update
 apt-get install -y nvidia-container-toolkit
 mkdir -p /var/lib/rancher/k3s/agent/etc/containerd
 nvidia-ctk runtime configure --runtime=containerd --config=/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl --set-as-default
-NVIDIA_DROPIN=$(awk -F'"' '/imports = /{{print $2}}' /var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl)
-grep -v '^version = ' $NVIDIA_DROPIN > /tmp/nvidia-ctk.toml
+# Don't parse the stub's `imports = [...]` line for the drop-in path — its
+# exact text format has already changed across nvidia-ctk releases and
+# broke this once (an unmatched pattern left the variable empty, `grep`
+# read from stdin instead of a file, hit immediate EOF under systemd, and
+# `set -e` killed the whole script before it ever reached the k3s join).
+# Glob the drop-in's well-known fixed directory directly instead, and fall
+# back to the --config target itself if nvidia-ctk didn't use drop-in mode
+# at all on this release.
+NVIDIA_SRC=/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl
+for f in /etc/containerd/conf.d/*.toml; do
+  if [ -f "$f" ]; then
+    NVIDIA_SRC="$f"
+  fi
+done
+grep -v '^version = ' "$NVIDIA_SRC" > /tmp/nvidia-ctk.toml
 {{ echo '{{{{ template "base" . }}}}'; cat /tmp/nvidia-ctk.toml; }} > /var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl
 nvidia-smi
 {join_cmd}
