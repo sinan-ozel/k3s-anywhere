@@ -201,13 +201,24 @@ runcmd:
     # TOML for a single document even though the SAME duplication across
     # two cross-file `imports` targets is an explicitly supported
     # containerd merge feature. Every GPU node provisioned under v0.2.5/
-    # v0.2.6 failed to join at all as a result — worse than the original
-    # gap this was meant to close. Reverted to just prepending the base
-    # directive in front of the unmodified `imports = [...]` pointer: GPU
-    # nodes join Ready again (confirmed working), at the cost of pods
-    # needing an explicit `runtimeClassName: nvidia` to get GPU access
-    # rather than getting it by default — see the campaign-setting-
-    # query-engine chart's RuntimeClass resource for that side of the fix.
+    # v0.2.6 failed to join at all as a result. v0.2.7 reverted to plain
+    # prepending, restoring joins but losing default_runtime_name again.
+    #
+    # v0.2.8: the real bug was simpler than either fix — the base
+    # directive is placed BEFORE `imports = [...]`, so by the time that
+    # line renders it sits right after the base template's own last table
+    # header (`[plugins."io.containerd.grpc.v1.cri".registry]`) with no
+    # header reset in between. Per TOML scoping rules, an unadorned
+    # `key = value` line belongs to whatever table the nearest preceding
+    # `[header]` opened — so `imports` was very likely being parsed as
+    # `registry.imports`, not the top-level `imports` key containerd's
+    # loader actually looks for, silently no-opping the entire drop-in
+    # merge (both the runtime handler AND default_runtime_name) rather
+    # than merging one but not the other. Putting `imports = [...]` FIRST
+    # in the file — before the base directive expands any table headers —
+    # places it unambiguously at document root where containerd expects
+    # it, without touching any table declaration at all (so it can't
+    # reintroduce v0.2.5/v0.2.6's duplicate-header crash).
     finish_script = f"""#!/bin/bash
 set -e
 curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
@@ -217,7 +228,7 @@ apt-get install -y nvidia-container-toolkit
 mkdir -p /var/lib/rancher/k3s/agent/etc/containerd
 nvidia-ctk runtime configure --runtime=containerd --config=/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl --set-as-default
 grep -v '^version = ' /var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl > /tmp/nvidia-ctk.toml
-{{ echo '{{{{ template "base" . }}}}'; cat /tmp/nvidia-ctk.toml; }} > /var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl
+{{ cat /tmp/nvidia-ctk.toml; echo '{{{{ template "base" . }}}}'; }} > /var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl
 nvidia-smi
 {join_cmd}
 systemctl disable k3s-gpu-finish.service
