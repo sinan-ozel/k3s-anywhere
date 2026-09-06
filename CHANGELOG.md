@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.2.13] - 2026-09-06
+
+- **AWS, Exoscale** Revert v0.2.11's `nvidia-container-toolkit` version pin (`1.17.8-1`): a live GPU node provisioned under v0.2.12 failed to join at all — both `k3s-agent.service` and `k3s-gpu-finish.service` failed on boot (confirmed via `aws ec2 get-console-output`; no SSH/SSM access in this account to get the actual `journalctl` error). Verified directly against NVIDIA's apt repo that `1.17.8-1` does still exist for all four packages pinned (`nvidia-container-toolkit`, `-base`, `libnvidia-container-tools`, `libnvidia-container1`), ruling out a missing-version apt error — but nvidia-ctk's own `config.toml.tmpl` output format has changed shape several times across versions (the whole source of the v0.2.5–v0.2.9 saga above), and this pin was never tested end-to-end against that specific version before release. Rather than keep guessing against a live, costing cluster with no log access, reverted to the floating-latest behavior last confirmed working at v0.2.9/v0.2.12. Pinning nvidia-ctk is still worth doing (see v0.2.11's rationale) but needs an isolated test against the pinned version's actual output before going back in.
+
 ## [0.2.12] - 2026-09-06
 
 - **AWS** Revert v0.2.11's `g6.xlarge` GPU node type back to `g4dn.2xlarge`: a live provision in `ca-central-1` failed with `InsufficientInstanceCapacity` — `RunInstances` exhausted its 25 retry attempts because `g6.xlarge` had no capacity in `ca-central-1a` specifically, the AZ this project's subnet is hardcoded to (AWS's own error suggested `ca-central-1b`/`ca-central-1d` instead, or omitting the AZ constraint). Reverting rather than chasing a specific AZ, since `g4dn.2xlarge` is a confirmed-available, previously-working baseline and the L4-vs-T4 upgrade wasn't the goal of this release.
