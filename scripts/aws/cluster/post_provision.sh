@@ -113,6 +113,62 @@ kubectl -n longhorn-system patch settings.longhorn.io backup-target \
 kubectl -n longhorn-system patch settings.longhorn.io backup-target-credential-secret \
     --type=merge -p '{"value":"longhorn-backup-secret"}'
 
+# ── GPU runtime (RuntimeClass + device plugin) ────────────────────────────────
+# Only when a GPU node was actually provisioned. Consumers get GPU access
+# with nothing to install on their end beyond a normal pod-spec request:
+# `resources.limits: {nvidia.com/gpu: 1}` + `runtimeClassName: nvidia`. See
+# manifests/nvidia/runtimeclass.yaml for why "nvidia" can't just be the
+# containerd default instead.
+
+NVIDIA_DEVICE_PLUGIN_VERSION="${NVIDIA_DEVICE_PLUGIN_VERSION:-v0.17.0}"
+
+if [ "${GPU_NODE_COUNT:-0}" -gt 0 ]; then
+    echo "Installing nvidia RuntimeClass + device plugin (${NVIDIA_DEVICE_PLUGIN_VERSION})..."
+    kubectl apply -f /app/manifests/nvidia/runtimeclass.yaml
+
+    kubectl apply -f - <<EOF
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: nvidia-device-plugin
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      name: nvidia-device-plugin
+  template:
+    metadata:
+      labels:
+        name: nvidia-device-plugin
+    spec:
+      runtimeClassName: nvidia
+      nodeSelector:
+        k3s-anywhere.io/gpu-node: "true"
+      priorityClassName: system-node-critical
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: nvidia-device-plugin
+          image: "nvcr.io/nvidia/k8s-device-plugin:${NVIDIA_DEVICE_PLUGIN_VERSION}"
+          securityContext:
+            privileged: true
+          env:
+            - name: NVIDIA_VISIBLE_DEVICES
+              value: "all"
+            - name: NVIDIA_DRIVER_CAPABILITIES
+              value: "all"
+          volumeMounts:
+            - name: device-plugin
+              mountPath: /var/lib/kubelet/device-plugins
+      volumes:
+        - name: device-plugin
+          hostPath:
+            path: /var/lib/kubelet/device-plugins
+EOF
+fi
+
 # ── Write final output JSON ───────────────────────────────────────────────────
 
 echo "Writing output artifact..."

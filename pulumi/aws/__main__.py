@@ -13,6 +13,11 @@ GPU_NODES      = int(os.environ.get("GPU_NODE_COUNT", "0"))
 PORTS          = get_ports()
 REGION         = os.environ["AWS_REGION"]
 K3S_VERSION    = os.environ.get("K3S_VERSION", "v1.31.4+k3s1")
+# Unpinned, this floats whatever NVIDIA's apt repo serves *at boot time* on
+# every future GPU node — unlike the rest of this script, which is frozen
+# the moment this image is released. Confirmed-working as of this release;
+# bump deliberately, not by surprise.
+NVIDIA_CTK_VERSION = os.environ.get("NVIDIA_CTK_VERSION", "1.17.8-1")
 DISK_SIZE_GB   = int(os.environ.get("DISK_SIZE_GB", "25"))
 ELASTIC_IP     = int(os.environ.get("ELASTIC_IP_COUNT", os.environ.get("ELASTIC_IP", "0")))
 EXTERNAL_DNS   = os.environ.get("EXTERNAL_DNS", "").lower() in ("1", "true", "yes")
@@ -260,7 +265,11 @@ set -e
 curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
 curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' > /etc/apt/sources.list.d/nvidia-container-toolkit.list
 apt-get update
-apt-get install -y nvidia-container-toolkit
+apt-get install -y \\
+  nvidia-container-toolkit={NVIDIA_CTK_VERSION} \\
+  nvidia-container-toolkit-base={NVIDIA_CTK_VERSION} \\
+  libnvidia-container-tools={NVIDIA_CTK_VERSION} \\
+  libnvidia-container1={NVIDIA_CTK_VERSION}
 mkdir -p /var/lib/rancher/k3s/agent/etc/containerd
 nvidia-ctk runtime configure --runtime=containerd --config=/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl --set-as-default
 grep -v '^version = ' /var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl > /tmp/nvidia-ctk.toml

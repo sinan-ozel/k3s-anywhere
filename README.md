@@ -232,6 +232,18 @@ docker run --rm \
 
 `ACTION=check` prints the current stack outputs (cluster name, node counts, endpoints) and runs a `pulumi preview` against your config — a read-only pass that reports any drift between the live infrastructure and the config files, without changing anything. Use it to confirm a cluster is still provisioned as expected, or to see what a `provision` run would change before running it.
 
+Purge orphaned storage on a live cluster:
+
+```bash
+docker run --rm \
+  -e CLUSTER_NAME=my-cluster \
+  -v $(pwd)/output:/output \
+  sinanozel/k3s-anywhere:0.2.10 \
+  # ACTION=purge is provider-agnostic — no PROVIDER or cloud credentials needed
+```
+
+`ACTION=purge` deletes any `Released` PersistentVolume it finds (and, if it's a Longhorn-backed volume, the underlying `volumes.longhorn.io` object too — deleting only the PV with `reclaimPolicy: Retain` removes the Kubernetes bookkeeping object but does **not** free any disk space, since Retain never invokes the CSI driver's delete). This is a distinct concern from `teardown`: `teardown` destroys the cloud infrastructure (which happens to take Longhorn's disks with it, since they live on the instances' own storage); `purge` runs against a cluster that's still up, to reclaim disk space `helm upgrade --atomic` rollbacks leave behind across failed deploys, without touching anything still in use. Backing up data before either is the consuming application's responsibility — see [Output reference](#output-reference).
+
 ## GitHub Actions usage
 
 ### Same-repo workflow
@@ -439,6 +451,9 @@ scripts/
   fetch/
     fetch.sh          ← ACTION=fetch: download + decrypt cluster output artifact
     .env.example      ← fill in and copy to .env (gitignored)
+  purge/
+    purge.sh          ← ACTION=purge: delete orphaned (Released) PVs + their
+                         backing Longhorn volumes on a live cluster
   exoscale/
     setup.sh          ← operator-run, admin credentials, never in CI
     cluster/

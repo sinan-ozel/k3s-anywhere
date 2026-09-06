@@ -5,17 +5,23 @@ error() { echo "ERROR: $1" >&2; exit 1; }
 
 # ── Validation ────────────────────────────────────────────────────────────────
 
-[ -n "${ACTION:-}" ] || error "ACTION is not set. Valid: setup | decommission | fetch | provision | teardown | refresh | check | reset"
+[ -n "${ACTION:-}" ] || error "ACTION is not set. Valid: setup | decommission | fetch | provision | teardown | purge | refresh | check | reset"
 
 case "$ACTION" in
-  setup|decommission|fetch|provision|teardown|refresh|check|reset) ;;
-  *) error "Unknown ACTION '${ACTION}'. Valid: setup | decommission | fetch | provision | teardown | refresh | check | reset" ;;
+  setup|decommission|fetch|provision|teardown|purge|refresh|check|reset) ;;
+  *) error "Unknown ACTION '${ACTION}'. Valid: setup | decommission | fetch | provision | teardown | purge | refresh | check | reset" ;;
 esac
 
 # ── Provider-agnostic actions ─────────────────────────────────────────────────
+# fetch and purge only need a kubeconfig (or the means to get one) — no cloud
+# credentials, no PROVIDER, no Pulumi stack.
 
 if [ "$ACTION" = "fetch" ]; then
   exec "/app/scripts/fetch/fetch.sh"
+fi
+
+if [ "$ACTION" = "purge" ]; then
+  exec "/app/scripts/purge/purge.sh"
 fi
 
 # ── Provider-specific actions ─────────────────────────────────────────────────
