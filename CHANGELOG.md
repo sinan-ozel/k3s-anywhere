@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.2.12] - 2026-09-06
+
+- **AWS** Revert v0.2.11's `g6.xlarge` GPU node type back to `g4dn.2xlarge`: a live provision in `ca-central-1` failed with `InsufficientInstanceCapacity` — `RunInstances` exhausted its 25 retry attempts because `g6.xlarge` had no capacity in `ca-central-1a` specifically, the AZ this project's subnet is hardcoded to (AWS's own error suggested `ca-central-1b`/`ca-central-1d` instead, or omitting the AZ constraint). Reverting rather than chasing a specific AZ, since `g4dn.2xlarge` is a confirmed-available, previously-working baseline and the L4-vs-T4 upgrade wasn't the goal of this release.
+
+## [0.2.11] - 2026-09-05
+
+- **AWS** Switch the GPU node type from `g4dn.2xlarge` to `g6.xlarge` — same price bracket in `ca-central-1`, newer NVIDIA L4 GPU (22GB VRAM) instead of paying for host CPU/RAM a GPU-bound llama.cpp workload doesn't use. (Reverted in v0.2.12 — see above.)
+- **All providers** Add missing `scripts/purge/purge.sh`, left out of the v0.2.10 tag — `entrypoint.sh` referenced a file that didn't exist in that image, so `ACTION=purge` would have failed outright on that release.
+
 ## [0.2.10] - 2026-09-05
 
 - **AWS, Exoscale** Pin `nvidia-container-toolkit` (and its `nvidia-container-toolkit-base`/`libnvidia-container-tools`/`libnvidia-container1` siblings) to a fixed version (`NVIDIA_CTK_VERSION`, default `1.17.8-1`) instead of `apt-get install -y nvidia-container-toolkit` floating whatever NVIDIA's apt repo serves that day. Unlike the rest of this script, that line runs live on every future GPU node at boot, not once at image-build time — a byte-identical release could still install a different, newer nvidia-ctk on every new provision, and nvidia-ctk's own output format changing across releases is exactly what caused the v0.2.5/v0.2.6 breakage this changelog documents above.

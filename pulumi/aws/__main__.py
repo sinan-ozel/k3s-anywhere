@@ -381,7 +381,7 @@ for i in range(GPU_NODES):
     )
     node = aws.ec2.Instance(
         f"{CLUSTER_NAME}-gpu-{i}",
-        instance_type="g6.xlarge",
+        instance_type="g4dn.2xlarge",
         user_data=init,
         tags=_tags(f"{CLUSTER_NAME}-gpu-{i}", _teardown),
         opts=_join_opts,
